@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.config import Settings
+from tests.helpers import make_settings
 
 _DB = "postgresql+psycopg://u:p@localhost/db"
 _GOOD_KEY = "k" * 40
@@ -9,7 +10,7 @@ _GOOD_KEY = "k" * 40
 
 def _settings(**overrides: str) -> Settings:
     values = {"database_url": _DB, "secret_key": _GOOD_KEY, **overrides}
-    return Settings(_env_file=None, **values)
+    return make_settings(**values)
 
 
 def test_valid_settings_load() -> None:
@@ -26,13 +27,13 @@ def test_short_secret_key_rejected() -> None:
 def test_missing_secret_key_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SECRET_KEY", raising=False)
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, database_url=_DB)
+        make_settings(database_url=_DB)
 
 
 def test_missing_database_url_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, secret_key=_GOOD_KEY)
+        make_settings(secret_key=_GOOD_KEY)
 
 
 def test_wildcard_cors_rejected() -> None:

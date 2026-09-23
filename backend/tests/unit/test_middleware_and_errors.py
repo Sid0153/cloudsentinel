@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.config import Settings
 from app.main import create_app
+from tests.helpers import make_settings
 
 
 def test_security_headers_present_on_api_responses(client: TestClient) -> None:
@@ -44,8 +44,7 @@ def test_unhandled_exception_returns_generic_500(app: FastAPI) -> None:
 
 
 def test_api_docs_disabled_in_production() -> None:
-    settings = Settings(
-        _env_file=None,
+    settings = make_settings(
         app_env="production",
         database_url="postgresql+psycopg://u:p@localhost/db",
         secret_key="x" * 40,
