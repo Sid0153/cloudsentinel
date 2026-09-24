@@ -1,17 +1,15 @@
-import StatusRow from "../components/StatusRow";
+import StatusRow from "./StatusRow";
 import { useReadiness } from "../hooks/useReadiness";
 
-export default function StatusPage() {
+export default function SystemStatus() {
   const state = useReadiness();
 
   return (
-    <section>
-      <h1 className="text-2xl font-semibold tracking-tight">System status</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Live readiness check from the backend. Scanning features arrive in later phases.
-      </p>
+    <section className="rounded-lg border border-slate-200 bg-white p-5">
+      <h2 className="text-sm font-semibold text-slate-700">System status</h2>
+      <p className="mt-1 text-sm text-slate-600">Live readiness check from the backend.</p>
 
-      <div className="mt-6 rounded-lg border border-slate-200 bg-white px-5">
+      <div>
         {state.kind === "loading" && (
           <p role="status" className="py-4 text-sm text-slate-600">
             Checking API status…

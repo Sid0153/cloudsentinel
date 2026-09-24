@@ -1,10 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 
-from app.api.deps import DbSession
+from app.api.deps import TOTAL_COUNT_HEADER, DbSession
 from app.auth.deps import AnalystUser, CurrentUser
 from app.models.scan import Scan
 from app.scans.deps import ScanRunner, get_scan_runner
@@ -42,13 +42,17 @@ def start_scan(
 def list_scans(
     _user: CurrentUser,
     db: DbSession,
+    response: Response,
     aws_account_id: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[Scan]:
     statement = select(Scan).order_by(Scan.created_at.desc(), Scan.id).limit(limit).offset(offset)
+    count = select(func.count()).select_from(Scan)
     if aws_account_id is not None:
         statement = statement.where(Scan.aws_account_id == aws_account_id)
+        count = count.where(Scan.aws_account_id == aws_account_id)
+    response.headers[TOTAL_COUNT_HEADER] = str(db.scalar(count) or 0)
     return list(db.scalars(statement))
 
 

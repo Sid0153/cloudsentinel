@@ -4,9 +4,14 @@ import { describe, expect, it } from "vitest";
 
 import App from "../src/App";
 import { AuthProvider } from "../src/auth/AuthContext";
+import { dashboard } from "./fixtures";
 import { callsTo, mockFetchRoutes, tokenReply, type MockRoutes } from "./mockApi";
 
-const HEALTH = { "GET /api/health/ready": { status: 200, body: { status: "ok", database: "up" } } };
+const HEALTH = {
+  "GET /api/health/ready": { status: 200, body: { status: "ok", database: "up" } },
+  "GET /api/dashboard/summary": { status: 200, body: dashboard() },
+  "GET /api/aws-accounts": { status: 200, body: [] },
+};
 
 function renderApp(path: string) {
   return render(
@@ -37,7 +42,7 @@ describe("route protection", () => {
     signedInAs("VIEWER");
     renderApp("/");
     expect(await screen.findByText("viewer@example.com")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "System status" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
   });
 
   it("shows the Users link to admins only", async () => {

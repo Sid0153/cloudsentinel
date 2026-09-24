@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import Select, case, or_, select
+from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.resources import ResourceType
@@ -26,6 +26,7 @@ _SEVERITY_RANK = case(
 @dataclass(frozen=True)
 class FindingFilters:
     aws_account_id: uuid.UUID | None = None
+    resource_uuid: uuid.UUID | None = None
     statuses: list[FindingStatus] | None = None
     severities: list[Severity] | None = None
     categories: list[Category] | None = None
@@ -44,6 +45,8 @@ def _escape_like(text: str) -> str:
 def _apply_filters(statement: Select[Any], filters: FindingFilters) -> Select[Any]:
     if filters.aws_account_id is not None:
         statement = statement.where(Finding.aws_account_id == filters.aws_account_id)
+    if filters.resource_uuid is not None:
+        statement = statement.where(Finding.resource_uuid == filters.resource_uuid)
     if filters.statuses:
         statement = statement.where(Finding.status.in_(filters.statuses))
     if filters.severities:
@@ -94,6 +97,11 @@ def list_findings(
         primary, Finding.last_detected.desc(), Finding.id
     )
     return list(db.scalars(statement.limit(limit).offset(offset)))
+
+
+def count_findings(db: Session, filters: FindingFilters) -> int:
+    statement = _apply_filters(select(func.count()).select_from(Finding), filters)
+    return int(db.scalar(statement) or 0)
 
 
 def update_finding_status(

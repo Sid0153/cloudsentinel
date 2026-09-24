@@ -1,10 +1,10 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlalchemy import Select, func, select
 
-from app.api.deps import DbSession
+from app.api.deps import TOTAL_COUNT_HEADER, DbSession
 from app.auth.deps import CurrentUser
 from app.domain.resources import ResourceType
 from app.models.resource import Resource
@@ -17,20 +17,25 @@ router = APIRouter(prefix="/resources", tags=["resources"])
 def list_resources(
     _user: CurrentUser,
     db: DbSession,
+    response: Response,
     aws_account_id: uuid.UUID | None = None,
     resource_type: ResourceType | None = None,
     region: Annotated[str | None, Query(max_length=32)] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[Resource]:
-    statement = select(Resource)
-    if aws_account_id is not None:
-        statement = statement.where(Resource.aws_account_id == aws_account_id)
-    if resource_type is not None:
-        statement = statement.where(Resource.resource_type == str(resource_type))
-    if region is not None:
-        statement = statement.where(Resource.region == region)
-    statement = statement.order_by(
+    def filtered(statement: Select[Any]) -> Select[Any]:
+        if aws_account_id is not None:
+            statement = statement.where(Resource.aws_account_id == aws_account_id)
+        if resource_type is not None:
+            statement = statement.where(Resource.resource_type == str(resource_type))
+        if region is not None:
+            statement = statement.where(Resource.region == region)
+        return statement
+
+    total = db.scalar(filtered(select(func.count()).select_from(Resource)))
+    response.headers[TOTAL_COUNT_HEADER] = str(total or 0)
+    statement = filtered(select(Resource)).order_by(
         Resource.resource_type, Resource.region, Resource.resource_id
     ).limit(limit).offset(offset)
     return list(db.scalars(statement))

@@ -2,10 +2,10 @@
 
 An AWS cloud security monitoring and misconfiguration detection platform (portfolio project).
 
-> **Status: Phase 6 of 10 (risk engine).** CloudSentinel can register an AWS account, run a
+> **Status: Phase 7 of 10 (dashboard).** CloudSentinel can register an AWS account, run a
 > read-only scan, store the discovered resources, turn misconfigurations into findings with
-> evidence and remediation, and give each finding an explainable 0-100 risk score. There is
-> **no dashboard yet** (findings are available through the API only). This README will be rewritten in Phase 10 and will only
+> evidence and remediation, give each finding an explainable 0-100 risk score, and show all of
+> it in a web dashboard. Audit logging (Phase 8) is not implemented yet. This README will be rewritten in Phase 10 and will only
 > describe what is actually implemented.
 
 ## What exists today
@@ -21,6 +21,9 @@ An AWS cloud security monitoring and misconfiguration detection platform (portfo
 - Roles ADMIN / ANALYST / VIEWER enforced on the server, with a test that every route has an
   access rule
 - Frontend: login page, protected routes, admin-only Users page
+- Dashboard (Phase 7): overall risk, open findings by severity and category, top risks, scan
+  history with coverage and per-rule results, findings with filters, search, sorting and triage,
+  finding details with evidence, risk explanation and remediation, resources, settings
 - AWS discovery (API only, no UI yet): account identity, EC2 instances, security groups,
   S3 buckets (encryption, public access blocks, policy status, ACLs), IAM users and roles
   (MFA, console password, broad policy statements), CloudTrail trails

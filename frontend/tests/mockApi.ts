@@ -3,28 +3,49 @@ import { vi } from "vitest";
 export interface MockReply {
   status: number;
   body?: unknown;
+  headers?: Record<string, string>;
 }
 
 // Keys look like "POST /api/auth/login". A value may be a function to vary replies per call.
-export type MockRoutes = Record<string, MockReply | (() => MockReply)>;
+// A key without a query string also matches the same path with any query string; an exact
+// key (with its query string) wins.
+// PENDING: the request never answers, to test loading states.
+export const PENDING = "PENDING";
+export type MockRoutes = Record<string, MockReply | (() => MockReply) | typeof PENDING>;
 
 export function mockFetchRoutes(routes: MockRoutes) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = (init?.method ?? "GET").toUpperCase();
     const key = `${method} ${String(input)}`;
-    const route = routes[key];
+    const route = routes[key] ?? routes[key.split("?")[0]];
     if (route === undefined) {
       throw new Error(`Unexpected request: ${key}`);
+    }
+    if (route === PENDING) {
+      return new Promise<Response>(() => {});
     }
     const reply = typeof route === "function" ? route() : route;
     return {
       ok: reply.status >= 200 && reply.status < 300,
       status: reply.status,
+      headers: new Headers(reply.headers ?? {}),
       json: async () => reply.body,
     } as unknown as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/** The URLs (with query strings) requested for a method and path. */
+export function requestedUrls(
+  fetchMock: ReturnType<typeof mockFetchRoutes>,
+  method: string,
+  path: string,
+): string[] {
+  return fetchMock.mock.calls
+    .filter(([, init]) => (init?.method ?? "GET").toUpperCase() === method)
+    .map(([input]) => String(input))
+    .filter((url) => url.split("?")[0] === path);
 }
 
 export function callsTo(fetchMock: ReturnType<typeof mockFetchRoutes>, key: string): number {

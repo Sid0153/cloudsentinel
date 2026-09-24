@@ -15,7 +15,8 @@ something works without verifying it, and end each phase with the interview-lear
 | 4 AWS integration | Done, green in CI (190 backend tests). Real-AWS scan not yet tried |
 | 5 Security rule engine | Done, green in CI (334 backend tests). 8 rules, findings API |
 | 6 Risk engine | Done, green in CI (378 backend tests). docs/risk-model.md |
-| 7 Dashboard | NEXT. Wait for the user to say "Proceed to Phase 7" |
+| 7 Dashboard | Done locally, visually checked at desktop and phone width; not yet pushed to CI |
+| 8 Audit logging | NEXT. Wait for the user to say "Proceed to Phase 8" |
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
 (Phase 5): checks in `backend/app/rules/checks/`, listed in `registry.py`, metadata in
@@ -54,5 +55,8 @@ green after pushing.
 - New rules need a check, a `registry.py` entry, a YAML file, a risk profile and tests (see
   `security-rules/README.md`); the app refuses to start if they do not match.
 - The backend image gets `security-rules/` through the compose build context `security_rules`.
+- Frontend: API calls live in `src/services/`, types mirror backend schemas in `src/types/api.ts`,
+  pages load data with `useApi`. Tests render the whole app with `tests/renderApp.tsx` and mock
+  `fetch` per route (`tests/mockApi.ts`; `PENDING` keeps a request open for loading states).
 - Frontend has no committed lockfile yet: run `npm install` first, and do not commit the
   generated `package-lock.json` (planned for Phase 9).

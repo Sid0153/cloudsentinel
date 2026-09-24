@@ -139,6 +139,36 @@ Automatic changes have `status_updated_by_id = NULL` and a short note; analyst c
   findings yet (Phase 7). Risk scoring limitations are in `docs/risk-model.md`.
 - The list endpoint returns a page (`limit`/`offset`) without a total count.
 
+## Dashboard (Phase 7)
+
+The React app (`frontend/src/`) only reads and writes through the REST API; it holds no data of
+its own beyond the access token in memory.
+
+| Page | Route | API |
+|---|---|---|
+| Dashboard | `/` | `GET /api/dashboard/summary` (optional `aws_account_id`) |
+| Findings | `/findings` | `GET /api/findings` (filters, search, sort and page are kept in the URL) |
+| Finding details | `/findings/:id` | `GET /api/findings/{id}`, `PATCH` for triage (ANALYST+) |
+| Scans | `/scans` | `GET /api/scans`, `POST /api/scans` (ANALYST+); refreshes every 3 s while a scan runs |
+| Scan details | `/scans/:id` | `GET /api/scans/{id}`, `GET /api/rules` |
+| Resources | `/resources`, `/resources/:id` | `GET /api/resources`, findings filtered by `resource_uuid` |
+| Settings | `/settings` | password change, AWS accounts (register and verify: ADMIN), rule catalog, health |
+| Users | `/users` | ADMIN only |
+
+- "Open" on the dashboard means OPEN or ACKNOWLEDGED. Overall risk is the highest risk score
+  among open findings (and links to that finding); it is not an average or a sum.
+- List endpoints return one page and put the total in the `X-Total-Count` header.
+- Evidence and configuration are rendered as JSON text, never as HTML. Reference links are shown
+  only for `https://` URLs and open with `rel="noopener noreferrer"`.
+- Role checks in the UI only hide controls; the API enforces every permission.
+- Charts are plain HTML bars (no chart library): one validated hue for single-series counts,
+  every value printed as text, a hover title per bar.
+- Code: `services/` (one file per API area), `hooks/useApi.ts` (loading / loaded / error state),
+  `components/` (badges, bar list, cards, pagination), `pages/`.
+
+Known limitations: no dark mode; no charts over time (scan-to-scan trends); the rule catalog is
+read-only in the UI; admins cannot edit or delete AWS accounts from the UI yet.
+
 ## Decisions
 
 | Decision | Why |
@@ -164,3 +194,7 @@ Automatic changes have `status_updated_by_id = NULL` and a short note; analyst c
 | Additive points, not multiplication | Every point can be explained in one line; easy to test and to argue about |
 | P1-P4 priorities instead of reusing LOW..CRITICAL | A HIGH-severity finding can be a P2; separate words avoid confusion |
 | Risk data computed at scan time and stored | Sorting and filtering in SQL; the breakdown shows exactly what was used |
+| One summary endpoint for the dashboard | One request, counts computed in SQL, consistent numbers across tiles |
+| Totals in `X-Total-Count`, bodies stay plain lists | Pagination without changing the shape of existing list responses |
+| Finding filters stored in the URL | Shareable, bookmarkable views; the back button works |
+| No chart or state-management library | A few bar lists and fetch hooks do not justify the dependencies |

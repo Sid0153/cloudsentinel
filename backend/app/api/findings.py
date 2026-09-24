@@ -2,15 +2,16 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
-from app.api.deps import DbSession
+from app.api.deps import TOTAL_COUNT_HEADER, DbSession
 from app.auth.deps import AnalystUser, CurrentUser
 from app.domain.resources import ResourceType
 from app.findings.service import (
     FindingFilters,
     SortField,
     SortOrder,
+    count_findings,
     list_findings,
     update_finding_status,
 )
@@ -29,7 +30,9 @@ router = APIRouter(prefix="/findings", tags=["findings"])
 def list_all_findings(
     _user: CurrentUser,
     db: DbSession,
+    response: Response,
     aws_account_id: uuid.UUID | None = None,
+    resource_uuid: uuid.UUID | None = None,
     finding_status: Annotated[list[FindingStatus] | None, Query(alias="status")] = None,
     severity: Annotated[list[Severity] | None, Query()] = None,
     category: Annotated[list[Category] | None, Query()] = None,
@@ -44,9 +47,11 @@ def list_all_findings(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[Finding]:
     """Findings, highest risk first by default. Repeat status / severity / category to match
-    any of several values, e.g. ?severity=HIGH&severity=CRITICAL."""
+    any of several values, e.g. ?severity=HIGH&severity=CRITICAL. The X-Total-Count header
+    holds the number of matching findings (for pagination)."""
     filters = FindingFilters(
         aws_account_id=aws_account_id,
+        resource_uuid=resource_uuid,
         statuses=finding_status,
         severities=severity,
         categories=category,
@@ -56,6 +61,7 @@ def list_all_findings(
         search=q.strip() if q else None,
         min_risk=min_risk,
     )
+    response.headers[TOTAL_COUNT_HEADER] = str(count_findings(db, filters))
     return list_findings(db, filters, sort, order, limit, offset)
 
 
