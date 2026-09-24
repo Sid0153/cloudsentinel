@@ -10,8 +10,9 @@ from app.audit.service import AuditFilters, list_audit_logs
 from app.auth.deps import AdminUser
 from app.models.audit_log import AuditLog
 from app.schemas.audit_log import AuditLogPublic
+from app.schemas.errors import error_responses
 
-router = APIRouter(prefix="/audit-logs", tags=["audit"])
+router = APIRouter(prefix="/audit-logs", tags=["audit"], responses=error_responses(401, 403))
 
 
 @router.get("", response_model=list[AuditLogPublic])

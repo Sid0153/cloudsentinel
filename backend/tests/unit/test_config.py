@@ -5,7 +5,7 @@ from app.core.config import Settings
 from tests.helpers import make_settings
 
 _DB = "postgresql+psycopg://u:p@localhost/db"
-_GOOD_KEY = "k" * 40
+_GOOD_KEY = "test-key-0123456789-abcdefghijklmnopq"
 
 
 def _settings(**overrides: str) -> Settings:
@@ -47,5 +47,29 @@ def test_cors_origins_are_split_and_trimmed() -> None:
 
 
 def test_docs_disabled_in_production() -> None:
-    assert _settings(app_env="production").docs_enabled is False
+    production = _settings(app_env="production", cors_origins="https://sentinel.example")
+    assert production.docs_enabled is False
     assert _settings(app_env="development").docs_enabled is True
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"secret_key": "a" * 64},  # long, but trivially guessable
+        {"database_url": "postgresql://u:p@localhost/db"},  # wrong driver
+        {"database_url": "sqlite:///cloudsentinel.db"},
+        {"app_env": "production", "cors_origins": "http://sentinel.example"},
+        {"app_env": "production", "cors_origins": "https://ok.example", "log_level": "DEBUG"},
+    ],
+)
+def test_unsafe_or_invalid_settings_are_rejected(overrides: dict[str, str]) -> None:
+    with pytest.raises(ValidationError):
+        _settings(**overrides)
+
+
+def test_validation_errors_never_contain_the_submitted_secret() -> None:
+    weak_key = "my-weak-key-12345"
+    with pytest.raises(ValidationError) as error:
+        _settings(secret_key=weak_key)
+    assert weak_key not in str(error.value)
+    assert "SECRET_KEY must be at least" in str(error.value)

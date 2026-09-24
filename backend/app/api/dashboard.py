@@ -5,9 +5,10 @@ from fastapi import APIRouter
 from app.api.deps import DbSession
 from app.auth.deps import CurrentUser
 from app.schemas.dashboard import DashboardSummary
+from app.schemas.errors import error_responses
 from app.services.dashboard import DashboardData, build_dashboard
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], responses=error_responses(401))
 
 
 @router.get("/summary", response_model=DashboardSummary)

@@ -14,8 +14,11 @@ from app.aws.session import SessionBuilder, get_caller_identity
 from app.models.aws_account import AwsAccount
 from app.scans.deps import get_aws_session_builder
 from app.schemas.aws_account import AwsAccountCreate, AwsAccountPublic, AwsAccountVerification
+from app.schemas.errors import error_responses
 
-router = APIRouter(prefix="/aws-accounts", tags=["aws-accounts"])
+router = APIRouter(
+    prefix="/aws-accounts", tags=["aws-accounts"], responses=error_responses(401, 403)
+)
 
 
 @router.get("", response_model=list[AwsAccountPublic])
@@ -23,7 +26,12 @@ def list_aws_accounts(_user: CurrentUser, db: DbSession) -> list[AwsAccount]:
     return list(db.scalars(select(AwsAccount).order_by(AwsAccount.name)))
 
 
-@router.post("", response_model=AwsAccountPublic, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AwsAccountPublic,
+    status_code=status.HTTP_201_CREATED,
+    responses=error_responses(409),
+)
 def create_aws_account(payload: AwsAccountCreate, admin: AdminUser, db: DbSession) -> AwsAccount:
     account = AwsAccount(**payload.model_dump(), created_by_id=admin.id)
     db.add(account)
@@ -51,7 +59,11 @@ def create_aws_account(payload: AwsAccountCreate, admin: AdminUser, db: DbSessio
     return account
 
 
-@router.post("/{aws_account_id}/verify", response_model=AwsAccountVerification)
+@router.post(
+    "/{aws_account_id}/verify",
+    response_model=AwsAccountVerification,
+    responses=error_responses(404, 502),
+)
 def verify_aws_account(
     aws_account_id: uuid.UUID,
     admin: AdminUser,

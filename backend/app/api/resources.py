@@ -8,9 +8,10 @@ from app.api.deps import TOTAL_COUNT_HEADER, DbSession
 from app.auth.deps import CurrentUser
 from app.domain.resources import ResourceType
 from app.models.resource import Resource
+from app.schemas.errors import error_responses
 from app.schemas.resource import ResourceDetail, ResourceSummary
 
-router = APIRouter(prefix="/resources", tags=["resources"])
+router = APIRouter(prefix="/resources", tags=["resources"], responses=error_responses(401))
 
 
 @router.get("", response_model=list[ResourceSummary])
@@ -41,7 +42,9 @@ def list_resources(
     return list(db.scalars(statement))
 
 
-@router.get("/{resource_uuid}", response_model=ResourceDetail)
+@router.get(
+    "/{resource_uuid}", response_model=ResourceDetail, responses=error_responses(404)
+)
 def get_resource(resource_uuid: uuid.UUID, _user: CurrentUser, db: DbSession) -> Resource:
     resource = db.get(Resource, resource_uuid)
     if resource is None:

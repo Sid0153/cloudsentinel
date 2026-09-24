@@ -6,12 +6,14 @@ startup instead of silently running with something guessable.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_SECRET_KEY_LENGTH = 32
+MIN_SECRET_KEY_DISTINCT_CHARS = 10  # rejects "aaaa..." and other obviously weak keys
+DATABASE_URL_PREFIX = "postgresql+psycopg://"
 # security-rules/rules/ at the repository root. The Docker image sets RULES_DIR instead.
 DEFAULT_RULES_DIR = Path(__file__).resolve().parents[3] / "security-rules" / "rules"
 
@@ -22,6 +24,8 @@ class Settings(BaseSettings):
         env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",  # the shared .env also holds POSTGRES_* values used by docker compose
+        # Validation errors must never echo a submitted value: it could be the secret key.
+        hide_input_in_errors=True,
     )
 
     app_env: Literal["development", "test", "production"] = "development"
@@ -40,9 +44,18 @@ class Settings(BaseSettings):
 
     @field_validator("secret_key")
     @classmethod
-    def _secret_key_is_long_enough(cls, value: str) -> str:
+    def _secret_key_is_strong_enough(cls, value: str) -> str:
         if len(value) < MIN_SECRET_KEY_LENGTH:
             raise ValueError(f"SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters")
+        if len(set(value)) < MIN_SECRET_KEY_DISTINCT_CHARS:
+            raise ValueError("SECRET_KEY looks too simple; generate a random one")
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def _database_url_uses_psycopg(cls, value: str) -> str:
+        if not value.startswith(DATABASE_URL_PREFIX):
+            raise ValueError(f"DATABASE_URL must start with {DATABASE_URL_PREFIX}")
         return value
 
     @field_validator("cors_origins")
@@ -52,6 +65,18 @@ class Settings(BaseSettings):
         if "*" in value:
             raise ValueError("CORS_ORIGINS must list explicit origins, wildcards are not allowed")
         return value
+
+    @model_validator(mode="after")
+    def _production_is_locked_down(self) -> Self:
+        """Settings that are fine on a laptop but unsafe on a server."""
+        if self.app_env != "production":
+            return self
+        insecure = [o for o in self.cors_origin_list if not o.startswith("https://")]
+        if insecure:
+            raise ValueError("In production every CORS_ORIGINS entry must use https://")
+        if self.log_level == "DEBUG":
+            raise ValueError("LOG_LEVEL=DEBUG is not allowed in production")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

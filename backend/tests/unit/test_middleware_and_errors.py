@@ -47,7 +47,8 @@ def test_api_docs_disabled_in_production() -> None:
     settings = make_settings(
         app_env="production",
         database_url="postgresql+psycopg://u:p@localhost/db",
-        secret_key="x" * 40,
+        secret_key="prod-like-key-0123456789-abcdefghijklmnop",
+        cors_origins="https://sentinel.example",
     )
     with TestClient(create_app(settings)) as test_client:
         assert test_client.get("/api/docs").status_code == 404

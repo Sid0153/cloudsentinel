@@ -1,0 +1,11 @@
+# Secret scanning (run in CI). Uses gitleaks' default rules; the allowlist names only the fake
+# AWS key IDs that the redaction tests use on purpose, so a real key anywhere is still caught.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used by tests"
+regexes = [
+  '''AKIAIOSFODNN7EXAMPLE''',  # AWS's own documentation example key ID
+  '''AKIAABCDEFGHIJKLMNOP''',
+]

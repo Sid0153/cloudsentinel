@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.api.deps import DbSession
 from app.auth.deps import AdminUser
 from app.models.user import User
+from app.schemas.errors import error_responses
 from app.schemas.user import UserCreate, UserPublic, UserUpdate
 from app.services.user_service import (
     EmailAlreadyExistsError,
@@ -16,7 +17,7 @@ from app.services.user_service import (
     update_user,
 )
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"], responses=error_responses(401, 403))
 
 
 @router.get("", response_model=list[UserPublic])
@@ -29,7 +30,12 @@ def list_all_users(
     return list_users(db, limit, offset)
 
 
-@router.post("", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=UserPublic,
+    status_code=status.HTTP_201_CREATED,
+    responses=error_responses(409),
+)
 def create_new_user(payload: UserCreate, _admin: AdminUser, db: DbSession) -> User:
     try:
         return create_user(db, payload.email, payload.password, payload.role, actor=_admin)
@@ -39,7 +45,7 @@ def create_new_user(payload: UserCreate, _admin: AdminUser, db: DbSession) -> Us
         ) from None
 
 
-@router.patch("/{user_id}", response_model=UserPublic)
+@router.patch("/{user_id}", response_model=UserPublic, responses=error_responses(400, 404))
 def update_existing_user(
     user_id: uuid.UUID, payload: UserUpdate, admin: AdminUser, db: DbSession
 ) -> User:

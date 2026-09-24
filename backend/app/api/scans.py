@@ -9,12 +9,18 @@ from app.auth.deps import AnalystUser, CurrentUser
 from app.models.scan import Scan
 from app.scans.deps import ScanRunner, get_scan_runner
 from app.scans.service import AwsAccountNotFoundError, ScanAlreadyActiveError, create_scan
+from app.schemas.errors import error_responses
 from app.schemas.scan import ScanCreate, ScanPublic
 
-router = APIRouter(prefix="/scans", tags=["scans"])
+router = APIRouter(prefix="/scans", tags=["scans"], responses=error_responses(401, 403))
 
 
-@router.post("", response_model=ScanPublic, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "",
+    response_model=ScanPublic,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=error_responses(404, 409),
+)
 def start_scan(
     payload: ScanCreate,
     user: AnalystUser,
@@ -56,7 +62,7 @@ def list_scans(
     return list(db.scalars(statement))
 
 
-@router.get("/{scan_id}", response_model=ScanPublic)
+@router.get("/{scan_id}", response_model=ScanPublic, responses=error_responses(404))
 def get_scan(scan_id: uuid.UUID, _user: CurrentUser, db: DbSession) -> Scan:
     scan = db.get(Scan, scan_id)
     if scan is None:

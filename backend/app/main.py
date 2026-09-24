@@ -16,6 +16,32 @@ from app.services.rule_catalog import get_rule_catalog
 
 logger = logging.getLogger(__name__)
 
+API_DESCRIPTION = """
+Read-only AWS security scanning: discover resources, evaluate security rules, score risk.
+
+**Authentication.** `POST /api/auth/login` returns a short-lived access token; send it as
+`Authorization: Bearer <token>`. A refresh token is set as an httpOnly cookie and exchanged at
+`POST /api/auth/refresh`. Roles: VIEWER (read), ANALYST (+ scans and triage), ADMIN (+ users,
+AWS accounts, audit log). The role a route needs is in its description and in docs/api.md.
+
+**Lists** return one page (`limit`, `offset`); the `X-Total-Count` header holds the total.
+
+**Errors** have a `detail` field. Validation errors (422) never echo the submitted values.
+"""
+
+OPENAPI_TAGS = [
+    {"name": "health", "description": "Liveness and readiness checks (no sign-in needed)."},
+    {"name": "auth", "description": "Sign in, refresh and end sessions, change your password."},
+    {"name": "users", "description": "User administration (ADMIN)."},
+    {"name": "aws-accounts", "description": "AWS accounts to scan. No credentials are stored."},
+    {"name": "scans", "description": "Start read-only scans and follow their progress."},
+    {"name": "resources", "description": "AWS resources found by scans."},
+    {"name": "findings", "description": "Security findings: filter, read, triage (ANALYST+)."},
+    {"name": "rules", "description": "The security rules every scan runs."},
+    {"name": "dashboard", "description": "Summary numbers for the dashboard."},
+    {"name": "audit", "description": "Append-only log of security-relevant actions (ADMIN)."},
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -35,6 +61,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="CloudSentinel API",
         version=__version__,
+        description=API_DESCRIPTION,
+        openapi_tags=OPENAPI_TAGS,
         lifespan=lifespan,
         docs_url="/api/docs" if settings.docs_enabled else None,
         openapi_url="/api/openapi.json" if settings.docs_enabled else None,

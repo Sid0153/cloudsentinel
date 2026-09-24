@@ -1,8 +1,8 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-# Use the lockfile when it exists (reproducible); fall back to npm install on the very first build.
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+COPY package.json package-lock.json ./
+# npm ci installs exactly what package-lock.json records (versions and integrity hashes).
+RUN npm ci
 COPY . .
 RUN npm run build
 

@@ -21,6 +21,7 @@ from app.core.config import Settings
 from app.core.rate_limit import SlidingWindowRateLimiter
 from app.models.user import User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, TokenResponse
+from app.schemas.errors import error_responses
 from app.schemas.user import UserPublic
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, responses=error_responses(401, 429))
 def login(
     payload: LoginRequest,
     request: Request,
@@ -104,7 +105,7 @@ def login(
     return _token_response(access_token, user, settings)
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, responses=error_responses(401))
 def refresh(
     request: Request, response: Response, db: DbSession, settings: SettingsDep
 ) -> TokenResponse | JSONResponse:
@@ -136,12 +137,16 @@ def logout(request: Request, db: DbSession, settings: SettingsDep) -> Response:
     return response
 
 
-@router.get("/me", response_model=UserPublic)
+@router.get("/me", response_model=UserPublic, responses=error_responses(401))
 def me(user: CurrentUser) -> UserPublic:
     return UserPublic.model_validate(user)
 
 
-@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(400, 401),
+)
 def change_password(
     payload: ChangePasswordRequest, user: CurrentUser, db: DbSession, settings: SettingsDep
 ) -> Response:

@@ -2,7 +2,7 @@
 
 An AWS cloud security monitoring and misconfiguration detection platform (portfolio project).
 
-> **Status: Phase 8 of 10 (audit logging).** CloudSentinel can register an AWS account, run a
+> **Status: Phase 9 of 10 (quality and DevOps).** CloudSentinel can register an AWS account, run a
 > read-only scan, store the discovered resources, turn misconfigurations into findings with
 > evidence and remediation, give each finding an explainable 0-100 risk score, show all of it in
 > a web dashboard, and keep an append-only audit log of security-relevant actions for admins.
@@ -84,22 +84,33 @@ Backend (from `backend/`):
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install --require-hashes -r requirements-dev.txt   # the lockfile: exact, hash-checked
 pytest   # database-backed tests are skipped unless TEST_DATABASE_URL is set
 # AWS is mocked with moto and the tests use fake credentials: no AWS account is needed
 # full suite against a scratch PostgreSQL database (tables are created and dropped):
-TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/scratch_db pytest
+TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/scratch_db pytest --cov=app
 ruff check . && mypy
+pip-audit -r requirements.txt --require-hashes --disable-pip   # known vulnerabilities
 ```
+
+Dependencies: edit the ranges in `requirements.in` / `requirements-dev.in`, then regenerate the
+lockfiles with the `uv pip compile` command written at the top of each `.txt` file.
 
 Frontend (from `frontend/`):
 
 ```bash
-npm install
-npm test
+npm ci          # installs exactly what package-lock.json records
+npm run lint    # ESLint
 npm run typecheck
+npm test
 npm run build
+npm audit --audit-level=moderate
 ```
+
+CI (`.github/workflows/ci.yml`) runs all of the above, a secret scan of the whole git history
+(gitleaks) and a Docker Compose smoke test that also checks the containers run hardened.
+Dependabot opens weekly update pull requests. API reference: `docs/api.md` and
+`docs/openapi.json`.
 
 ## Local development without Docker
 
@@ -120,7 +131,7 @@ backend/         FastAPI app (app/), Alembic migrations (alembic/), tests (tests
   app/domain/    typed resource models shared by everything else
 frontend/        React + TypeScript + Vite + Tailwind (src/), tests (tests/)
 security-rules/  rule metadata (one YAML file per rule) and the rule list
-docs/            architecture, security model, risk model, AWS permissions
+docs/            architecture, security model, risk model, API (api.md, openapi.json), AWS permissions
 infrastructure/  least-privilege IAM policy
 docker-compose.yml, docker-compose.aws.yml (optional AWS access), .env.example
 ```

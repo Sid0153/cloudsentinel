@@ -18,12 +18,13 @@ from app.findings.service import (
 from app.models.finding import Finding, FindingStatus
 from app.models.resource import Resource
 from app.rules.model import Category, Severity
+from app.schemas.errors import error_responses
 from app.schemas.finding import FindingDetail, FindingStatusUpdate, FindingSummary, RulePublic
 from app.services.rule_catalog import get_rule_catalog
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/findings", tags=["findings"])
+router = APIRouter(prefix="/findings", tags=["findings"], responses=error_responses(401, 403))
 
 
 @router.get("", response_model=list[FindingSummary])
@@ -83,13 +84,13 @@ def _detail(db: DbSession, finding: Finding) -> FindingDetail:
     )
 
 
-@router.get("/{finding_id}", response_model=FindingDetail)
+@router.get("/{finding_id}", response_model=FindingDetail, responses=error_responses(404))
 def get_finding(finding_id: uuid.UUID, _user: CurrentUser, db: DbSession) -> FindingDetail:
     """One finding with its evidence, the rule's explanation and remediation steps."""
     return _detail(db, _get_or_404(db, finding_id))
 
 
-@router.patch("/{finding_id}", response_model=FindingDetail)
+@router.patch("/{finding_id}", response_model=FindingDetail, responses=error_responses(404))
 def change_finding_status(
     finding_id: uuid.UUID, payload: FindingStatusUpdate, user: AnalystUser, db: DbSession
 ) -> FindingDetail:

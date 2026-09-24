@@ -233,3 +233,7 @@ export yet; the table grows until an operator archives it.
 | Audit rows written in the same transaction as the action | An action is never saved without its record, or the reverse |
 | Append-only enforced by database triggers, not only by the API | Holds against bugs and direct SQL as the application user |
 | Real failure reason stored, generic message returned | Admins can tell brute force from a locked account; attackers learn nothing |
+| Hash-pinned lockfiles from `uv pip compile --universal` | One lock valid on Windows, Linux and macOS; tampered packages are refused |
+| Upgrade dependencies instead of silencing audits | React Router 7, Vite 8, Vitest 5 and pytest 9 fixed every reported advisory |
+| Docs checked by tests (`openapi.json`, the role table in `api.md`) | Documentation cannot silently drift from the code |
+| `check-config` before migrations | A misconfigured deployment fails with a readable message, not a stack trace |

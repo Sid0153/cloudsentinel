@@ -7,8 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Dependencies first so this layer is cached when only application code changes.
+# requirements.txt is a lockfile: exact versions, and --require-hashes refuses any package
+# whose download does not match the recorded hash (protects against tampered packages).
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --require-hashes -r requirements.txt
 
 RUN addgroup --system app && adduser --system --ingroup app app
 

@@ -17,7 +17,8 @@ something works without verifying it, and end each phase with the interview-lear
 | 6 Risk engine | Done, green in CI (378 backend tests). docs/risk-model.md |
 | 7 Dashboard | Done, green in CI (387 backend, 53 frontend tests). Visually checked desktop + phone |
 | 8 Audit logging | Done, green in CI (410 backend, 58 frontend tests). Append-only via DB triggers |
-| 9 Quality / DevOps | NEXT. Wait for the user to say "Proceed to Phase 9" |
+| 9 Quality / DevOps | Done locally; not yet pushed to CI |
+| 10 Portfolio preparation | NEXT. Wait for the user to say "Proceed to Phase 10" |
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
 (Phase 5): checks in `backend/app/rules/checks/`, listed in `registry.py`, metadata in
@@ -40,10 +41,14 @@ means bumping `RISK_MODEL_VERSION`.
 
 ## Checks before every commit
 
-Backend (from `backend/`): `ruff check .`, `mypy`, `pytest` (with TEST_DATABASE_URL set).
-Frontend (from `frontend/`): `npm test`, `npm run typecheck`, `npm run build`.
-CI (`.github/workflows/ci.yml`) runs the same plus a Docker Compose smoke test; confirm it is
-green after pushing.
+Backend (from `backend/`): `ruff check .`, `mypy`, `pytest --cov=app` (with TEST_DATABASE_URL
+set; CI fails under 90% coverage), `pip-audit -r requirements.txt --require-hashes --disable-pip`.
+Frontend (from `frontend/`): `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`,
+`npm audit --audit-level=moderate`.
+CI (`.github/workflows/ci.yml`) runs the same plus gitleaks and a Docker Compose smoke test
+(including hardening checks); confirm it is green after pushing.
+After changing an API route or schema: `python -m app.cli export-openapi` (from `backend/`) and
+update the table in `docs/api.md`; tests fail if either is stale.
 
 ## Conventions
 
@@ -62,5 +67,8 @@ green after pushing.
 - Frontend: API calls live in `src/services/`, types mirror backend schemas in `src/types/api.ts`,
   pages load data with `useApi`. Tests render the whole app with `tests/renderApp.tsx` and mock
   `fetch` per route (`tests/mockApi.ts`; `PENDING` keeps a request open for loading states).
-- Frontend has no committed lockfile yet: run `npm install` first, and do not commit the
-  generated `package-lock.json` (planned for Phase 9).
+- Dependencies are locked. Backend: edit `requirements*.in`, then run the `uv pip compile`
+  command at the top of the `.txt` lockfile; install with `pip install --require-hashes`.
+  Frontend: `npm ci`; `package-lock.json` is committed. Never silence an audit finding without
+  saying why; upgrade instead.
+- In Git Bash, `docker run -v` paths need `MSYS_NO_PATHCONV=1`.
