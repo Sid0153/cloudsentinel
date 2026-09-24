@@ -2,18 +2,23 @@
 
 Skipped unless TEST_DATABASE_URL is set, e.g.
   TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/cloudsentinel_test pytest
-Use a scratch database: the test upgrades to head and then downgrades to base.
+Use a scratch database: the test downgrades to base (dropping all tables) and then
+upgrades back to head so other tests can keep using the schema.
 """
 
 import os
-from pathlib import Path
 
 import pytest
 from alembic import command
+from alembic.autogenerate import compare_metadata
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text
 
+import app.models  # noqa: F401  (registers the ORM tables on Base.metadata)
 from app.core.config import get_settings
+from app.database.base import Base
+from tests.conftest import ALEMBIC_INI
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
@@ -22,27 +27,41 @@ pytestmark = [
     pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL not set"),
 ]
 
-_ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 
-
-def test_upgrade_and_downgrade(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert TEST_DATABASE_URL is not None
-    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+def _config() -> Config:
     get_settings.cache_clear()
-    try:
-        config = Config(str(_ALEMBIC_INI))
-        command.upgrade(config, "head")
+    return Config(str(ALEMBIC_INI))
 
-        engine = create_engine(TEST_DATABASE_URL)
-        assert inspect(engine).has_table("alembic_version")
+
+def test_upgrade_and_downgrade() -> None:
+    assert TEST_DATABASE_URL is not None
+    config = _config()
+    engine = create_engine(TEST_DATABASE_URL)
+    try:
+        command.upgrade(config, "head")
+        tables = set(inspect(engine).get_table_names())
+        assert {"users", "refresh_tokens", "alembic_version"} <= tables
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0001"
+        assert version == "0002"
 
         command.downgrade(config, "base")
-        with engine.connect() as connection:
-            remaining = connection.execute(text("SELECT count(*) FROM alembic_version")).scalar()
-        assert remaining == 0
-        engine.dispose()
+        remaining = set(inspect(engine).get_table_names())
+        assert "users" not in remaining
+        assert "refresh_tokens" not in remaining
     finally:
-        get_settings.cache_clear()
+        command.upgrade(config, "head")
+        engine.dispose()
+
+
+def test_models_match_the_migrations() -> None:
+    """Fails if someone changes a model without writing the matching migration."""
+    assert TEST_DATABASE_URL is not None
+    command.upgrade(_config(), "head")
+    engine = create_engine(TEST_DATABASE_URL)
+    try:
+        with engine.connect() as connection:
+            differences = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+    finally:
+        engine.dispose()
+    assert differences == []

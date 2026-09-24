@@ -1,22 +1,36 @@
-const API_BASE = "/api";
+import { refreshSession } from "./auth";
+import { ApiError, readJson, send, type SendOptions } from "./http";
+import { tokenStore } from "./tokenStore";
 
-export class ApiError extends Error {
-  readonly status: number;
+export { ApiError };
 
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
+let sessionExpiredListener: (() => void) | null = null;
+
+/** The AuthProvider registers here so a failed refresh sends the user back to the login page. */
+export function onSessionExpired(listener: (() => void) | null): void {
+  sessionExpiredListener = listener;
 }
 
-/** Thin wrapper around fetch: one place for the base URL and error handling. */
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) {
-    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+/**
+ * Calls the API with the in-memory access token. If the server answers 401 for a signed-in
+ * user, the token has probably expired: refresh once and retry once.
+ */
+export async function apiRequest<T>(path: string, options: SendOptions = {}): Promise<T> {
+  const hadToken = tokenStore.get() !== null;
+  let response = await send(path, { ...options, token: tokenStore.get() });
+
+  if (response.status === 401 && hadToken) {
+    try {
+      await refreshSession();
+    } catch {
+      sessionExpiredListener?.();
+      throw new ApiError("Session expired", 401);
+    }
+    response = await send(path, { ...options, token: tokenStore.get() });
   }
-  return (await response.json()) as T;
+  return readJson<T>(response);
+}
+
+export function apiGet<T>(path: string): Promise<T> {
+  return apiRequest<T>(path);
 }

@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.core.rate_limit import SlidingWindowRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
     )
     app.add_middleware(RequestContextMiddleware)
+
+    # One limiter per app instance (so tests are isolated); keyed by client IP.
+    app.state.login_limiter = SlidingWindowRateLimiter(settings.login_rate_limit_per_minute)
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix="/api")

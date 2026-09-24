@@ -3,11 +3,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, pool
 
+import app.models  # noqa: F401  (registers the ORM tables on Base.metadata)
 from app.core.config import get_settings
 from app.database.base import Base
-
-# Phase 3+ imports the ORM models here (e.g. `import app.models`) so that
-# Base.metadata knows about them.
 
 config = context.config
 if config.config_file_name is not None:

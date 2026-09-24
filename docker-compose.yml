@@ -29,6 +29,10 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      # nginx is the only peer that can reach this port inside the compose network, and the
+      # host port below is bound to localhost. Trusting its X-Forwarded-For lets the login
+      # rate limiter see real client IPs instead of nginx's own address.
+      FORWARDED_ALLOW_IPS: "*"
     depends_on:
       db:
         condition: service_healthy
