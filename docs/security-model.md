@@ -37,9 +37,9 @@
 ## Authorization
 
 - Every protected route depends on `get_current_user`; role checks use `require_role(...)`.
-- Roles: ADMIN (everything, user management), ANALYST (will run scans and triage findings),
-  VIEWER (read only). Today the only role-restricted endpoints are the ADMIN-only `/api/users`
-  routes; the ANALYST tier is verified with a test route until scan endpoints exist.
+- Roles: ADMIN (everything: users, AWS account registration and verification), ANALYST
+  (starts scans; will triage findings from Phase 5), VIEWER (read only: accounts, scans,
+  resources).
 - `tests/api/test_rbac.py` fails if any route lacks a declared access rule, and runs every
   protected route against every role.
 - Frontend route guards are a convenience only. The API is the enforcement point.
@@ -53,3 +53,20 @@
   to avoid this, but two tabs can still collide.
 - There is no email verification, password reset flow or MFA yet.
 - Audit logging of these events arrives in Phase 8 (events are only written to the app log now).
+- Scans run as background tasks inside the API process. A restart loses a running scan; the
+  container entrypoint marks such scans FAILED on the next start. This assumes one backend
+  instance.
+
+## AWS access
+
+- No AWS credential is ever stored in the database, the repository or the UI. The backend
+  uses boto3's standard credential chain; see `docs/aws-permissions.md`.
+- Every scan first calls `sts:GetCallerIdentity` and refuses to continue if the credentials
+  belong to a different account than the one registered.
+- The code only reads configuration. The two calls that are not plain reads change no
+  resources: `iam:GenerateCredentialReport` (asks AWS to build the report) and the optional
+  `sts:AssumeRole`. The recommended IAM policy grants 14 actions.
+- Error messages stored with a scan contain only the AWS error code and operation name
+  (e.g. `AccessDenied (GetBucketAcl)`), never AWS's full message, which can contain ARNs.
+- The test suite replaces credentials with fake values and uses moto, so tests can never
+  reach a real AWS account.

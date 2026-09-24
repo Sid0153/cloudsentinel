@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth.passwords import hash_password
 from app.auth.tokens import create_access_token
 from app.core.config import Settings, get_settings
+from app.models.aws_account import AwsAccount
 from app.models.user import Role, User
 
 TEST_PASSWORD = "correct-horse-battery-staple"
@@ -63,3 +64,23 @@ def refresh_cookie_value(response: httpx.Response) -> str:
 def cookie_header(value: str) -> dict[str, str]:
     """Send a specific refresh cookie, regardless of what the client's cookie jar holds."""
     return {"Cookie": f"cs_refresh={value}"}
+
+
+MOTO_ACCOUNT_ID = "123456789012"  # the account moto always pretends to be
+
+
+def make_aws_account(
+    db: Session,
+    account_id: str = MOTO_ACCOUNT_ID,
+    regions: list[str] | None = None,
+    role_arn: str | None = None,
+) -> AwsAccount:
+    account = AwsAccount(
+        account_id=account_id,
+        name=f"test-{account_id}",
+        regions=regions or ["us-east-1", "eu-west-1"],
+        role_arn=role_arn,
+    )
+    db.add(account)
+    db.commit()
+    return account

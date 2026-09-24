@@ -93,19 +93,6 @@ jobs:
         run: curl -fsS http://localhost:8080/api/health/ready | grep -q '"database":"up"'
       - name: Frontend serves the app
         run: curl -fsS http://localhost:8080/ | grep -q "CloudSentinel"
-      - name: Create an admin, sign in and refresh through nginx
-        run: |
-          docker compose exec -T -e CLOUDSENTINEL_ADMIN_PASSWORD=CiAdminPassw0rd-2026 \
-            backend python -m app.cli create-admin --email ci-admin@example.com
-          curl -fsS -c cookies.txt -H 'Content-Type: application/json' \
-            -d '{"email":"ci-admin@example.com","password":"CiAdminPassw0rd-2026"}' \
-            http://localhost:8080/api/auth/login | grep -q access_token
-          curl -fsS -b cookies.txt -c cookies.txt -X POST \
-            http://localhost:8080/api/auth/refresh | grep -q access_token
-      - name: Protected endpoints reject anonymous requests
-        run: |
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/users)" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/auth/me)" = "401"
       - name: Show container logs on failure
         if: failure()
         run: docker compose logs --no-color

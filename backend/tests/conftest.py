@@ -10,6 +10,21 @@ os.environ["DATABASE_URL"] = (
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECRET_KEY", "test-only-key-0123456789-abcdefghijklmnop")
 
+# Fake AWS credentials for every test, so no test can ever reach a real AWS account even if
+# the developer's machine has credentials configured. moto accepts any values.
+os.environ.pop("AWS_PROFILE", None)
+os.environ.update(
+    {
+        "AWS_ACCESS_KEY_ID": "testing",
+        "AWS_SECRET_ACCESS_KEY": "testing",
+        "AWS_SESSION_TOKEN": "testing",
+        "AWS_DEFAULT_REGION": "us-east-1",
+        "AWS_CONFIG_FILE": os.devnull,
+        "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+        "AWS_EC2_METADATA_DISABLED": "true",
+    }
+)
+
 from collections.abc import Iterator  # noqa: E402
 from pathlib import Path  # noqa: E402
 
@@ -18,9 +33,12 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from moto import mock_aws  # noqa: E402
 from sqlalchemy import Engine, create_engine  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.aws.collectors import iam as iam_collector  # noqa: E402
+from app.aws.collectors import s3 as s3_collector  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.database.session import get_db  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -84,3 +102,26 @@ def db_client(app: FastAPI, db_session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_db] = _get_db
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def mocked_aws(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """An in-memory fake of AWS (moto). Its account ID is always 123456789012."""
+    monkeypatch.setattr(iam_collector, "REPORT_POLL_SECONDS", 0.0)
+    with mock_aws():
+        yield
+
+
+@pytest.fixture
+def policy_status(monkeypatch: pytest.MonkeyPatch) -> dict[str, bool]:
+    """moto does not implement S3 GetBucketPolicyStatus, so tests decide the answer.
+
+    Set policy_status["bucket-name"] = True to make a bucket's policy count as public.
+    """
+    verdicts: dict[str, bool] = {}
+
+    def fake(client: object, bucket: str) -> bool | None:
+        return verdicts.get(bucket, False)
+
+    monkeypatch.setattr(s3_collector, "fetch_policy_is_public", fake)
+    return verdicts

@@ -22,3 +22,8 @@ files = ["app", "tests"]
 [tool.ruff.lint.isort]
 # The local ./alembic/ migrations folder would otherwise make ruff treat the alembic library as first-party code.
 known-third-party = ["alembic"]
+
+[[tool.mypy.overrides]]
+# boto3, botocore and moto ship without complete type information.
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "moto", "moto.*"]
+ignore_missing_imports = true

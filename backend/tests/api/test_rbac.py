@@ -4,6 +4,7 @@ EXPECTED_ACCESS is the single source of truth for who may call what. Every API r
 appear either there or in PUBLIC_ROUTES, and every entry is exercised for every role.
 """
 
+import re
 import uuid
 
 import pytest
@@ -11,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.auth.deps import AnalystUser
 from app.models.user import Role, User
 from tests.helpers import access_token_for, make_user
 
@@ -32,6 +32,14 @@ EXPECTED_ACCESS: dict[Route, Role | None] = {
     ("GET", "/api/users"): Role.ADMIN,
     ("POST", "/api/users"): Role.ADMIN,
     ("PATCH", "/api/users/{user_id}"): Role.ADMIN,
+    ("GET", "/api/aws-accounts"): None,
+    ("POST", "/api/aws-accounts"): Role.ADMIN,
+    ("POST", "/api/aws-accounts/{aws_account_id}/verify"): Role.ADMIN,
+    ("GET", "/api/scans"): None,
+    ("POST", "/api/scans"): Role.ANALYST,
+    ("GET", "/api/scans/{scan_id}"): None,
+    ("GET", "/api/resources"): None,
+    ("GET", "/api/resources/{resource_uuid}"): None,
 }
 
 _RANK = {Role.VIEWER: 1, Role.ANALYST: 2, Role.ADMIN: 3}
@@ -67,6 +75,11 @@ def test_every_route_has_a_declared_access_rule(app: FastAPI) -> None:
     assert declared - routes == set(), "access rule refers to a route that no longer exists"
 
 
+def _url(path: str) -> str:
+    """Fills every path parameter with a random UUID (the target need not exist)."""
+    return re.sub(r"\{[^}]+\}", str(uuid.uuid4()), path)
+
+
 def _matrix() -> list[tuple[str, str, Role | None, Role]]:
     return [
         (method, path, minimum, role)
@@ -84,8 +97,7 @@ def users_by_role(db_session: Session) -> dict[Role, User]:
 def test_anonymous_requests_are_rejected(
     db_client: TestClient, method: str, path: str
 ) -> None:
-    url = path.replace("{user_id}", str(uuid.uuid4()))
-    response = db_client.request(method, url)
+    response = db_client.request(method, _url(path))
     assert response.status_code == 401
 
 
@@ -98,7 +110,7 @@ def test_role_matrix(
     minimum: Role | None,
     role: Role,
 ) -> None:
-    url = path.replace("{user_id}", str(uuid.uuid4()))
+    url = _url(path)
     headers = {"Authorization": f"Bearer {access_token_for(users_by_role[role])}"}
     # Requests carry no body. Authorization runs before validation, so a permitted role gets
     # a 422/404/200 (anything but 401/403) and a forbidden role is stopped with 403.
@@ -107,24 +119,3 @@ def test_role_matrix(
         assert response.status_code not in (401, 403)
     else:
         assert response.status_code == 403
-
-
-def test_analyst_level_dependency_admits_analyst_and_admin_only(
-    app: FastAPI, db_client: TestClient, db_session: Session
-) -> None:
-    """The ANALYST tier has no real endpoint yet; prove the dependency semantics directly."""
-
-    def analyst_only(user: AnalystUser) -> dict[str, str]:
-        return {"role": user.role}
-
-    app.add_api_route("/api/_test/analyst-only", analyst_only)
-
-    results: dict[Role, int] = {}
-    for role in Role:
-        user = make_user(db_session, role)
-        response = db_client.get(
-            "/api/_test/analyst-only",
-            headers={"Authorization": f"Bearer {access_token_for(user)}"},
-        )
-        results[role] = response.status_code
-    assert results == {Role.VIEWER: 403, Role.ANALYST: 200, Role.ADMIN: 200}

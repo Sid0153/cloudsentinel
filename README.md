@@ -2,9 +2,10 @@
 
 An AWS cloud security monitoring and misconfiguration detection platform (portfolio project).
 
-> **Status: Phase 3 of 10 (authentication and RBAC).** Login, roles and protected routes exist.
-> There is **no AWS integration, rule engine or dashboard yet**. Those arrive in later phases; this README will be rewritten in
-> Phase 10 and will only describe what is actually implemented.
+> **Status: Phase 4 of 10 (AWS integration).** CloudSentinel can register an AWS account, run a
+> read-only scan and store the discovered resources. There is **no security rule engine, risk
+> score or dashboard yet**: scans find resources, not problems. Those arrive in later phases;
+> this README will be rewritten in Phase 10 and will only describe what is actually implemented.
 
 ## What exists today
 
@@ -19,6 +20,13 @@ An AWS cloud security monitoring and misconfiguration detection platform (portfo
 - Roles ADMIN / ANALYST / VIEWER enforced on the server, with a test that every route has an
   access rule
 - Frontend: login page, protected routes, admin-only Users page
+- AWS discovery (API only, no UI yet): account identity, EC2 instances, security groups,
+  S3 buckets (encryption, public access blocks, policy status, ACLs), IAM users and roles
+  (MFA, console password, broad policy statements), CloudTrail trails
+- Scans run in the background, record per-service coverage (`SUCCEEDED` / `PARTIAL` /
+  `FAILED`), and never treat a denied API call as a clean result
+- Least-privilege IAM policy: `infrastructure/cloudsentinel-readonly-policy.json`,
+  explained in `docs/aws-permissions.md`
 
 ## Run with Docker
 
@@ -41,6 +49,17 @@ docker compose exec backend python -m app.cli create-admin --email you@example.c
 It asks for a password (12 to 128 characters) without showing it. Then sign in at
 http://localhost:8080.
 
+**Scan a real AWS account (optional).** The default stack has no AWS access. Follow
+`docs/aws-permissions.md` to create a read-only identity and profile, then:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.aws.yml up --build
+```
+
+Using the API docs at http://localhost:8000/api/docs, register the account
+(`POST /api/aws-accounts`), verify it (`POST /api/aws-accounts/{id}/verify`), start a scan
+(`POST /api/scans`) and read the results (`GET /api/scans/{id}`, `GET /api/resources`).
+
 To wipe the database (for example after changing `POSTGRES_PASSWORD`): `docker compose down -v`.
 
 ## Run tests
@@ -51,6 +70,7 @@ Backend (from `backend/`):
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 pytest   # database-backed tests are skipped unless TEST_DATABASE_URL is set
+# AWS is mocked with moto and the tests use fake credentials: no AWS account is needed
 # full suite against a scratch PostgreSQL database (tables are created and dropped):
 TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/scratch_db pytest
 ruff check . && mypy
@@ -75,8 +95,12 @@ In `frontend/`, `npm run dev` serves on http://localhost:5173 and proxies `/api`
 ## Repository layout
 
 ```
-backend/    FastAPI app (app/), Alembic migrations (alembic/), tests (tests/)
-frontend/   React + TypeScript + Vite + Tailwind (src/), tests (tests/)
-docs/       Architecture notes
-docker-compose.yml, .env.example
+backend/         FastAPI app (app/), Alembic migrations (alembic/), tests (tests/)
+  app/aws/       boto3 session, collectors (AWS calls) and normalizers (pure functions)
+  app/scans/     scan orchestration and persistence
+  app/domain/    typed resource models shared by everything else
+frontend/        React + TypeScript + Vite + Tailwind (src/), tests (tests/)
+docs/            architecture, security model, AWS permissions
+infrastructure/  least-privilege IAM policy
+docker-compose.yml, docker-compose.aws.yml (optional AWS access), .env.example
 ```

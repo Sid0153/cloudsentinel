@@ -1,0 +1,12 @@
+# Optional override that gives the backend container read-only access to your AWS profile.
+# Use it only when you want to scan a real account:
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml up --build
+# Set AWS_PROFILE and AWS_CONFIG_DIR in .env. No key is ever written into this file.
+services:
+  backend:
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE:?set AWS_PROFILE in .env}
+      # boto3 looks for ~/.aws/config, ~/.aws/credentials and the SSO token cache here.
+      HOME: /home/app
+    volumes:
+      - ${AWS_CONFIG_DIR:?set AWS_CONFIG_DIR in .env}:/home/app/.aws:ro

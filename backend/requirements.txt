@@ -1,4 +1,4 @@
-# Runtime dependencies. Later phases add boto3 and others.
+# Runtime dependencies.
 # Ranges, not exact pins: a lockfile (pip-compile) is added in Phase 9.
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30,<1.0
@@ -9,3 +9,4 @@ alembic>=1.13,<2.0
 psycopg[binary]>=3.2,<4.0
 argon2-cffi>=23.1,<26.0
 PyJWT>=2.8,<3.0
+boto3>=1.34,<2.0
