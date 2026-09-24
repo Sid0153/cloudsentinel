@@ -17,7 +17,7 @@ something works without verifying it, and end each phase with the interview-lear
 | 6 Risk engine | Done, green in CI (378 backend tests). docs/risk-model.md |
 | 7 Dashboard | Done, green in CI (387 backend, 53 frontend tests). Visually checked desktop + phone |
 | 8 Audit logging | Done, green in CI (410 backend, 58 frontend tests). Append-only via DB triggers |
-| 9 Quality / DevOps | Done locally; not yet pushed to CI |
+| 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
 | 10 Portfolio preparation | NEXT. Wait for the user to say "Proceed to Phase 10" |
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
