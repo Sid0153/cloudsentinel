@@ -47,7 +47,7 @@ def _api_routes(app: FastAPI) -> set[Route]:
     found: set[Route] = set()
     for route in app.routes:
         if isinstance(route, APIRoute):
-            for method in route.methods - {"HEAD", "OPTIONS"}:
+            for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
                 found.add((method, route.path))
     return found
 
@@ -69,7 +69,7 @@ def test_every_protected_route_requires_authentication(app: FastAPI) -> None:
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        for method in route.methods - {"HEAD", "OPTIONS"}:
+        for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
             if (method, route.path) in EXPECTED_ACCESS:
                 assert _depends_on(route.dependant, get_current_user), (method, route.path)
 
