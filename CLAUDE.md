@@ -15,7 +15,7 @@ something works without verifying it, and end each phase with the interview-lear
 | 4 AWS integration | Done, green in CI (190 backend tests). Real-AWS scan not yet tried |
 | 5 Security rule engine | Done, green in CI (334 backend tests). 8 rules, findings API |
 | 6 Risk engine | Done, green in CI (378 backend tests). docs/risk-model.md |
-| 7 Dashboard | Done locally, visually checked at desktop and phone width; not yet pushed to CI |
+| 7 Dashboard | Done, green in CI (387 backend, 53 frontend tests). Visually checked desktop + phone |
 | 8 Audit logging | NEXT. Wait for the user to say "Proceed to Phase 8" |
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
