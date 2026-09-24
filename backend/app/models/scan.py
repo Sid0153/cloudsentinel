@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -35,8 +35,10 @@ class Scan(Base):
         sa.ForeignKey("users.id", ondelete="SET NULL")
     )
     caller_arn: Mapped[str | None] = mapped_column(sa.String(2048))
+    # Set from the application clock: PostgreSQL's now() is the start of the *transaction*,
+    # so two scans created in one transaction would get the same time and an unstable order.
     created_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), server_default=sa.func.now()
+        sa.DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=sa.func.now()
     )
     started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
