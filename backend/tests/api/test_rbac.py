@@ -40,6 +40,10 @@ EXPECTED_ACCESS: dict[Route, Role | None] = {
     ("GET", "/api/scans/{scan_id}"): None,
     ("GET", "/api/resources"): None,
     ("GET", "/api/resources/{resource_uuid}"): None,
+    ("GET", "/api/findings"): None,
+    ("GET", "/api/findings/{finding_id}"): None,
+    ("PATCH", "/api/findings/{finding_id}"): Role.ANALYST,
+    ("GET", "/api/rules"): None,
 }
 
 _RANK = {Role.VIEWER: 1, Role.ANALYST: 2, Role.ADMIN: 3}

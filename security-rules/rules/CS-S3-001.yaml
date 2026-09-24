@@ -1,0 +1,33 @@
+id: CS-S3-001
+title: S3 bucket is publicly accessible
+category: DATA_PROTECTION
+severity: HIGH
+severity_note: >
+  CRITICAL when the bucket ACL lets everyone (AllUsers) or any AWS account
+  (AuthenticatedUsers) write to the bucket or change its ACL (WRITE, WRITE_ACP or
+  FULL_CONTROL). HIGH for public read access through the ACL, and for a public bucket policy
+  (the policy's actions are not inspected, so it is not assumed to allow writes).
+description: >
+  The bucket is public through its ACL (a grant to AllUsers or AuthenticatedUsers that
+  IgnorePublicAcls does not neutralize) or through its bucket policy (AWS reports the policy
+  as public and RestrictPublicBuckets does not apply). Block Public Access settings are
+  considered at both the bucket and the account level.
+rationale: >
+  Public buckets are one of the most common causes of cloud data breaches. Anyone on the
+  internet can list or download the data, and with write access can also replace or delete
+  it, or use the bucket to host malware.
+remediation: |
+  1. Confirm whether the bucket really must be public (a static website served through
+     CloudFront usually does not need a public bucket).
+  2. Turn on all four S3 Block Public Access settings for the bucket, and preferably for the
+     whole account.
+  3. Remove public grants from the bucket ACL and public statements from the bucket policy.
+  4. If content must be public, serve it through CloudFront with origin access control.
+limitations: >
+  Object-level ACLs, access points and cross-account (non-public) policies are not examined.
+  "Public policy" is AWS's own verdict from GetBucketPolicyStatus. If a required check could
+  not be read (for example access denied), the bucket is reported as not evaluated, never as
+  private.
+references:
+  - title: Blocking public access to your Amazon S3 storage
+    url: https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html

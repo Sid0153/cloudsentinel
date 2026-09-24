@@ -1,0 +1,21 @@
+id: CS-S3-002
+title: S3 bucket has no default encryption configured
+category: DATA_PROTECTION
+severity: MEDIUM
+description: >
+  GetBucketEncryption reports no server-side encryption configuration for the bucket.
+rationale: >
+  Default encryption makes sure every new object is encrypted at rest. With SSE-KMS it also
+  adds a second access check (the KMS key policy) and an audit trail of key use.
+remediation: |
+  1. Open the bucket in the S3 console, go to Properties, then Default encryption.
+  2. Enable SSE-S3, or SSE-KMS with a customer-managed key if you need key-level access
+     control and auditing.
+  3. Existing objects are not re-encrypted automatically; copy them in place if needed.
+limitations: >
+  Since January 2023 AWS applies SSE-S3 to all new buckets by default, so this rule rarely
+  fires on real accounts. It checks the bucket default only, not individual objects or which
+  KMS key is used.
+references:
+  - title: Setting default server-side encryption behavior for Amazon S3 buckets
+    url: https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-encryption.html

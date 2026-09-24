@@ -12,6 +12,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limit import SlidingWindowRateLimiter
+from app.services.rule_catalog import get_rule_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Application factory. Run with: uvicorn app.main:create_app --factory"""
     settings = settings or get_settings()
     configure_logging(settings.log_level)
+    # Fail at startup, not during the first scan, if the rule catalog is broken.
+    catalog = get_rule_catalog()
+    logger.info("Loaded %d security rules", len(catalog.rules))
 
     app = FastAPI(
         title="CloudSentinel API",

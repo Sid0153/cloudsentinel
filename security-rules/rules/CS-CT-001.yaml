@@ -1,0 +1,29 @@
+id: CS-CT-001
+title: No multi-region CloudTrail trail is logging
+category: LOGGING
+severity: HIGH
+severity_note: >
+  HIGH when no trail is logging at all. MEDIUM when at least one single-region trail is
+  logging, so some regions are recorded but not all.
+description: >
+  None of the account's trails is both multi-region and currently logging (GetTrailStatus
+  IsLogging). Evaluated once per AWS account, against the account resource.
+rationale: >
+  CloudTrail is the record of who did what in the account. Without it an intrusion, a deleted
+  resource or a changed permission cannot be investigated, and activity in unused regions (a
+  common place to hide crypto-mining instances) goes unrecorded.
+remediation: |
+  1. In the CloudTrail console, create a trail (or edit an existing one) that applies to all
+     regions.
+  2. Deliver the logs to a dedicated S3 bucket with restricted access, and enable log file
+     validation.
+  3. Make sure logging is started, and alert on StopLogging and DeleteTrail events.
+limitations: >
+  Only trail existence, multi-region scope and logging status are checked. Event selectors
+  (management vs data events), delivery errors, log encryption and organization-wide coverage
+  are not verified. CloudTrail event history (the default 90 days) does not count as a trail.
+references:
+  - title: Receiving CloudTrail log files from multiple regions
+    url: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/receive-cloudtrail-log-files-from-multiple-regions.html
+  - title: Security best practices in AWS CloudTrail
+    url: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/best-practices-security.html

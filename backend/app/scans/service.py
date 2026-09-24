@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from collections import Counter
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
@@ -11,10 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.aws.common import AWS_ERRORS, error_label
 from app.aws.session import SessionBuilder, get_caller_identity
+from app.findings.sync import ScanScope, sync_findings
 from app.models.aws_account import AwsAccount
 from app.models.scan import ACTIVE_STATUSES, Scan, ScanStatus
+from app.rules.engine import evaluate
+from app.rules.model import Rule
 from app.scans.discovery import discover
 from app.scans.persistence import upsert_resources
+from app.services.rule_catalog import get_rule_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +67,13 @@ def _finish(db: Session, scan: Scan, status: ScanStatus, error: str | None = Non
     db.commit()
 
 
-def _run(db: Session, scan: Scan, account: AwsAccount, build_session: SessionBuilder) -> None:
+def _run(
+    db: Session,
+    scan: Scan,
+    account: AwsAccount,
+    build_session: SessionBuilder,
+    rules: list[Rule],
+) -> None:
     try:
         session = build_session(account.role_arn, account.regions[0])
         identity = get_caller_identity(session)
@@ -79,16 +90,38 @@ def _run(db: Session, scan: Scan, account: AwsAccount, build_session: SessionBui
     db.commit()
 
     discovery = discover(session, identity, list(account.regions))
-    counts = upsert_resources(db, account.id, scan.id, discovery.resources, _now())
-    scan.resource_counts = counts
+    now = _now()
+    rows = upsert_resources(db, account.id, scan.id, discovery.resources, now)
+    counts = Counter(resource_type for _, resource_type, _ in rows)
+    scan.resource_counts = dict(counts)
     scan.resource_count = sum(counts.values())
     scan.coverage = discovery.coverage
-    _finish(
-        db, scan, ScanStatus.COMPLETED if discovery.complete else ScanStatus.COMPLETED_WITH_ERRORS
+
+    evaluation = evaluate(rules, discovery.resources, discovery.coverage)
+    scope = ScanScope(
+        aws_account_uuid=account.id,
+        aws_account_id=account.account_id,
+        scan_id=scan.id,
+        regions=list(account.regions),
+        coverage=discovery.coverage,
+        now=now,
     )
+    finding_counts = sync_findings(db, scope, evaluation, rows)
+    scan.finding_counts = finding_counts
+    scan.finding_count = sum(finding_counts.values())
+    scan.rule_results = evaluation.rule_results
+
+    complete = discovery.complete and not evaluation.had_errors
+    _finish(db, scan, ScanStatus.COMPLETED if complete else ScanStatus.COMPLETED_WITH_ERRORS)
 
 
-def execute_scan(db: Session, scan_id: uuid.UUID, build_session: SessionBuilder) -> None:
+def execute_scan(
+    db: Session,
+    scan_id: uuid.UUID,
+    build_session: SessionBuilder,
+    rules: list[Rule] | None = None,
+) -> None:
+    """Runs a PENDING scan to the end. rules defaults to the application's rule catalog."""
     scan = db.get(Scan, scan_id)
     if scan is None or scan.status != ScanStatus.PENDING:
         logger.warning("Scan %s is missing or not pending; not running it", scan_id)
@@ -104,7 +137,8 @@ def execute_scan(db: Session, scan_id: uuid.UUID, build_session: SessionBuilder)
     logger.info("Scan %s started for AWS account record %s", scan.id, account.id)
 
     try:
-        _run(db, scan, account, build_session)
+        active_rules = get_rule_catalog().rules if rules is None else rules
+        _run(db, scan, account, build_session, active_rules)
     except ScanFailedError as exc:
         db.rollback()
         _finish(db, scan, ScanStatus.FAILED, str(exc))

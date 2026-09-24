@@ -19,7 +19,8 @@ api  →  services / scans  →  aws / rules / risk / audit  →  domain
 
 - `aws/` is the only package that imports boto3.
 - `domain/` holds plain dataclasses with no boto3, database or HTTP code.
-- `rules/` and `risk/` (Phases 5-6) will be pure Python as well.
+- `rules/` is pure Python as well (it reads its YAML metadata files, nothing else); `risk/`
+  (Phase 6) will be too.
 
 ## Scan pipeline (Phase 4)
 
@@ -36,7 +37,11 @@ POST /api/scans (ANALYST+)
             coverage entry: SUCCEEDED / PARTIAL / FAILED, item count, short error labels
           A crash in one service marks only that service FAILED.
        5. upsert_resources(): one row per resource, updated in place (first_seen / last_seen)
-       6. COMPLETED, or COMPLETED_WITH_ERRORS when any service was not fully read
+       6. evaluate(): every rule on every resource of its type → PASS / FAIL / UNKNOWN,
+          plus a per-rule summary stored as scan.rule_results
+       7. sync_findings(): create, update, reopen or close findings (see below)
+       8. COMPLETED, or COMPLETED_WITH_ERRORS when any service was not fully read or a rule
+          crashed
 GET /api/scans/{id} — poll for status, counts and coverage
 ```
 
@@ -49,6 +54,15 @@ GET /api/scans/{id} — poll for status, counts and coverage
 | `app/scans/persistence.py` | Upserts resources |
 | `app/scans/service.py` | Scan lifecycle: create, execute, reconcile after restart |
 | `app/scans/deps.py` | Injection points so tests can run scans inline or simulate failures |
+| `app/domain/coverage.py` | Coverage statuses and which service produces each resource type |
+| `app/rules/model.py` | Severity, rule metadata, `Outcome`, the `@check` decorator |
+| `app/rules/checks/*.py` | The 8 checks, one file per area; pure functions |
+| `app/rules/registry.py` | Explicit list of every check |
+| `app/rules/catalog.py` | Loads `security-rules/rules/*.yaml` and pairs each file with its check |
+| `app/rules/engine.py` | Runs the rules, builds detections and per-rule summaries |
+| `app/findings/fingerprint.py` | Stable SHA-256 identity of "rule X failing on resource Y" |
+| `app/findings/sync.py` | Applies one scan's results to the findings table |
+| `app/findings/service.py` | Finding list filters and analyst status changes |
 
 ### Supported resources
 
@@ -75,6 +89,51 @@ GET /api/scans/{id} — poll for status, counts and coverage
 - Background tasks run inside the API process, so this design assumes a single backend
   instance. A job queue (for example Celery or RQ) would be the next step.
 
+## Rule engine and findings (Phase 5)
+
+Rules are described in `security-rules/README.md`. Each check returns one of:
+
+| Outcome | Meaning | Effect on findings |
+|---|---|---|
+| PASS | evaluated and compliant (or not applicable) | may close an open finding |
+| FAIL | non-compliant; carries evidence and a severity | creates or updates a finding |
+| UNKNOWN | required data missing (access denied, service failed) | changes nothing |
+
+Per rule, the scan stores a summary (`scan.rule_results`): `FAILED`, `PASSED` (everything
+evaluated, coverage complete), `INCOMPLETE` (no finding, but something could not be evaluated or
+a service was not fully read), `NOT_APPLICABLE` (no resources of that type, coverage complete) or
+`ERROR` (the check raised an exception; details only in the server log).
+
+### Finding lifecycle
+
+One finding row per fingerprint = SHA-256 of `aws_account_id | rule_id | resource_type | region |
+resource_id`. Evidence and severity are not part of it, so they can change while the finding
+stays the same.
+
+| Situation in a new scan | Result |
+|---|---|
+| New problem | new finding, `OPEN` |
+| Detected again | `last_detected`, evidence and severity updated; `RESOLVED` → `OPEN` (reopened) |
+| Detected again, analyst chose `ACKNOWLEDGED` or `FALSE_POSITIVE` | status kept |
+| Rule evaluated the resource and it passed | `OPEN`/`ACKNOWLEDGED` → `RESOLVED` |
+| Resource gone, its service fully read, region in scope | `OPEN`/`ACKNOWLEDGED` → `RESOLVED` |
+| UNKNOWN outcome, service partly read, region not scanned | unchanged |
+
+Automatic changes have `status_updated_by_id = NULL` and a short note; analyst changes
+(`PATCH /api/findings/{id}`, ANALYST or ADMIN) record the user. `FALSE_POSITIVE` requires a note.
+`scan.finding_counts` is a per-severity snapshot of what that scan detected.
+
+### Known limitations of the rule engine
+
+- The checks inherit every limitation of discovery listed above (for example IAM pattern
+  matching). Each rule's YAML file lists what it does not check.
+- Rule metadata is read once at startup; changing a YAML file needs a restart.
+- Findings keep the title and severity of the latest detection. If a rule's text changes, open
+  findings pick it up at the next scan; closed ones keep the old text.
+- There is no risk score yet (Phase 6), no audit log table yet (Phase 8; status changes go to the
+  application log), and no UI for findings yet (Phase 7).
+- The list endpoint returns a page (`limit`/`offset`) without a total count.
+
 ## Decisions
 
 | Decision | Why |
@@ -89,3 +148,10 @@ GET /api/scans/{id} — poll for status, counts and coverage
 | "Unknown" is a first-class value | A denied API call must never look like a secure setting |
 | One resource row per resource, snapshot counts per scan | Stable IDs for findings later; history stays accurate |
 | FastAPI BackgroundTasks, not Celery | No extra infrastructure; the scan code does not depend on it |
+| Rule text in YAML, logic in Python | Text is reviewable without code; logic stays typed and unit-tested. A DSL would need its own parser and tests |
+| No `rules` database table | Rules are versioned with the code; the API serves the catalog from memory. A table would duplicate it |
+| Strict catalog loading at startup | A typo in a rule file stops the app instead of producing findings without remediation |
+| Explicit check registry | `registry.py` is a plain list: easy to read, no import side effects |
+| Account-wide rules run on the `AWS::Account` resource | "Is there any trail?" cannot be asked of a single trail |
+| UNKNOWN never closes a finding | A denied API call must not make a problem disappear |
+| Fingerprint from the 12-digit AWS account ID | Stable if the account is removed and registered again |

@@ -152,3 +152,10 @@ class NormalizedResource:
     def config_dict(self) -> dict[str, Any]:
         """JSON-friendly form of the configuration, as stored in the database."""
         return asdict(self.config)
+
+
+ResourceKey = tuple[str, str, str]  # (region, resource_type, resource_id): unique per account
+
+
+def resource_key(resource: NormalizedResource) -> ResourceKey:
+    return (resource.region, str(resource.resource_type), resource.resource_id)

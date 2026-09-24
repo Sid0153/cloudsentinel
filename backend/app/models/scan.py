@@ -52,3 +52,12 @@ class Scan(Base):
         JSONB, default=dict, server_default=sa.text("'{}'::jsonb")
     )
     error_summary: Mapped[str | None] = mapped_column(sa.String(500))
+    # Findings detected by this scan (a snapshot, like resource_counts), by severity.
+    finding_count: Mapped[int] = mapped_column(default=0, server_default="0")
+    finding_counts: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=sa.text("'{}'::jsonb")
+    )
+    # Per rule: PASSED / FAILED / INCOMPLETE / NOT_APPLICABLE / ERROR and counts.
+    rule_results: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=sa.text("'{}'::jsonb")
+    )

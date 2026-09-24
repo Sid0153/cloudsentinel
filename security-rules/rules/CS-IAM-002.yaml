@@ -1,0 +1,31 @@
+id: CS-IAM-002
+title: IAM identity has overly broad permissions
+category: IDENTITY
+severity: MEDIUM
+severity_note: >
+  HIGH for full administrator access: the AWS-managed AdministratorAccess policy, or an
+  unconditional Allow of Action "*" on Resource "*". MEDIUM for service-wide wildcards such
+  as "s3:*" on Resource "*", or for "*" limited by a Condition.
+description: >
+  An IAM user (directly or through a group) or role has the AWS-managed AdministratorAccess
+  policy, or an inline or customer-managed policy with an Allow statement whose Action is "*"
+  or "service:*" and whose Resource is "*".
+rationale: >
+  Wildcard permissions break least privilege. If the credentials of this user or role are
+  stolen, or an application using the role is compromised, the attacker gets every permission
+  in the wildcard, often including the ability to create new administrators.
+remediation: |
+  1. Use IAM Access Analyzer or "Last accessed" information to see which actions are used.
+  2. Replace the wildcard statement with the specific actions and resource ARNs needed.
+  3. Keep full administrator access to a small number of break-glass or SSO roles protected
+     by MFA.
+limitations: >
+  Simple pattern matching, not a full IAM policy evaluation. NotAction, NotResource,
+  permission boundaries, SCPs, session policies and resource policies are not analyzed.
+  AWS-managed policies other than AdministratorAccess (for example PowerUserAccess or
+  IAMFullAccess) are not inspected. Service-linked roles are skipped because AWS manages them.
+references:
+  - title: Security best practices in IAM (apply least-privilege permissions)
+    url: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html
+  - title: IAM Access Analyzer policy generation
+    url: https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html

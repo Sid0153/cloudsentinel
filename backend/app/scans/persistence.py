@@ -1,14 +1,11 @@
 import uuid
-from collections import Counter
 from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.resources import NormalizedResource
+from app.domain.resources import NormalizedResource, ResourceKey, resource_key
 from app.models.resource import Resource
-
-ResourceKey = tuple[str, str, str]  # (region, resource_type, resource_id)
 
 
 def upsert_resources(
@@ -17,8 +14,8 @@ def upsert_resources(
     scan_id: uuid.UUID,
     resources: list[NormalizedResource],
     now: datetime,
-) -> dict[str, int]:
-    """Inserts new resources and updates known ones. Returns counts per resource type.
+) -> dict[ResourceKey, Resource]:
+    """Inserts new resources and updates known ones. Returns the rows found by this scan.
 
     Loads the account's existing rows once, which is fine at portfolio scale (thousands of
     rows). A very large estate would want a bulk INSERT ... ON CONFLICT instead.
@@ -27,10 +24,9 @@ def upsert_resources(
         (row.region, row.resource_type, row.resource_id): row
         for row in db.scalars(select(Resource).where(Resource.aws_account_id == aws_account_id))
     }
-    seen: set[ResourceKey] = set()
+    seen: dict[ResourceKey, Resource] = {}
     for item in resources:
-        key = (item.region, str(item.resource_type), item.resource_id)
-        seen.add(key)
+        key = resource_key(item)
         row = existing.get(key)
         if row is None:
             row = Resource(
@@ -46,4 +42,6 @@ def upsert_resources(
         row.config = item.config_dict()
         row.last_seen = now
         row.last_scan_id = scan_id
-    return dict(Counter(resource_type for _, resource_type, _ in seen))
+        seen[key] = row
+    db.flush()  # assigns IDs to new rows, which findings refer to
+    return seen

@@ -13,13 +13,16 @@ something works without verifying it, and end each phase with the interview-lear
 | 2 Foundation | Done, green in CI |
 | 3 Authentication and RBAC | Done, green in CI |
 | 4 AWS integration | Done, green in CI (190 backend tests). Real-AWS scan not yet tried |
-| 5 Security rule engine | NEXT. Wait for the user to say "Proceed to Phase 5" |
+| 5 Security rule engine | Done locally (8 rules, findings API); not yet pushed to CI |
+| 6 Risk engine | NEXT. Wait for the user to say "Proceed to Phase 6" |
 
-Design decisions for the remaining phases are in `docs/architecture.md` and
-`docs/security-model.md` (rule engine: pure Python rules in `backend/app/rules/`, metadata in
-`security-rules/rules/*.yaml`, findings de-duplicated by fingerprint, "unknown" coverage must
-never produce a clean result; risk engine: deterministic 0-100 score from severity, exposure,
-impact and confidence with a stored breakdown).
+Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
+(Phase 5): checks in `backend/app/rules/checks/`, listed in `registry.py`, metadata in
+`security-rules/rules/*.yaml`; outcomes PASS / FAIL / UNKNOWN; findings de-duplicated by
+fingerprint and closed only when a scan proves the problem is gone (UNKNOWN never closes one).
+Risk engine (Phase 6): deterministic 0-100 score from severity, exposure, impact and confidence
+with a stored breakdown; finding evidence (e.g. `attached_instance_ids`, `public_write`,
+`privileged`) is there to feed the exposure and impact factors.
 
 ## Environment (Windows)
 
@@ -46,3 +49,8 @@ green after pushing.
   GetBucketPolicyStatus; tests use the `policy_status` fixture), real PostgreSQL for API tests.
 - Every new API route must be added to `EXPECTED_ACCESS` or `PUBLIC_ROUTES` in
   `backend/tests/api/test_rbac.py`.
+- New rules need a check, a `registry.py` entry, a YAML file and tests (see
+  `security-rules/README.md`); the app refuses to start if they do not match.
+- The backend image gets `security-rules/` through the compose build context `security_rules`.
+- Frontend has no committed lockfile yet: run `npm install` first, and do not commit the
+  generated `package-lock.json` (planned for Phase 9).

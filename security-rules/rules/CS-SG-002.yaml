@@ -1,0 +1,22 @@
+id: CS-SG-002
+title: Security group allows RDP from the internet
+category: NETWORK
+severity: HIGH
+description: >
+  An inbound rule lets any IPv4 (0.0.0.0/0) or IPv6 (::/0) address reach TCP port 3389
+  (Remote Desktop), either directly, through a port range that includes 3389, or through an
+  "all traffic" rule.
+rationale: >
+  Internet-facing RDP is one of the most common entry points for ransomware. It is targeted
+  by password spraying and by exploits against the RDP service itself.
+remediation: |
+  1. In the EC2 console, open Security Groups and select the group.
+  2. Edit the inbound rules and remove the rule that allows port 3389 from 0.0.0.0/0 or ::/0.
+  3. If remote desktop access is needed, allow it only from known addresses, use a VPN, or
+     use Fleet Manager / Session Manager port forwarding instead.
+limitations: >
+  Only TCP is checked (RDP can also use UDP 3389). Only the exact ranges 0.0.0.0/0 and ::/0
+  count as "the internet".
+references:
+  - title: Security group rules (Amazon VPC)
+    url: https://docs.aws.amazon.com/vpc/latest/userguide/security-group-rules.html

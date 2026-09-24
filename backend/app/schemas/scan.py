@@ -26,3 +26,6 @@ class ScanPublic(BaseModel):
     resource_counts: dict[str, int]
     coverage: dict[str, Any]
     error_summary: str | None
+    finding_count: int
+    finding_counts: dict[str, int]  # findings detected by this scan, by severity
+    rule_results: dict[str, Any]  # per rule: status (PASSED, FAILED, INCOMPLETE...) and counts

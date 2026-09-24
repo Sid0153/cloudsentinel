@@ -1,0 +1,31 @@
+id: CS-SG-003
+title: Security group allows broad inbound access from the internet
+category: NETWORK
+severity: MEDIUM
+severity_note: >
+  HIGH when a rule opens all traffic, the whole port range, or a range that includes a
+  sensitive service (databases, remote administration, file sharing, the Docker API and
+  similar; the list is SENSITIVE_PORTS in backend/app/rules/checks/security_groups.py).
+  MEDIUM for any other port. The finding takes the worst severity of all its rules.
+description: >
+  An inbound TCP or UDP rule (or an "all traffic" rule) is open to 0.0.0.0/0 or ::/0 for
+  something other than a single web port (80 or 443). A rule that opens only port 22 or only
+  port 3389 is reported by CS-SG-001 / CS-SG-002 instead.
+rationale: >
+  Every port reachable from the internet is attack surface. Databases, caches and admin
+  interfaces are frequently found exposed and are then read, encrypted for ransom or used to
+  take over the host.
+remediation: |
+  1. For each rule listed in the evidence, decide whether it really needs to be public.
+  2. Replace 0.0.0.0/0 or ::/0 with the specific address ranges or security groups that need
+     access (for example the load balancer's security group).
+  3. Put databases and internal services in private subnets with no public inbound rules.
+limitations: >
+  ICMP and other protocols without ports are ignored. A single port 80 or 443 is treated as
+  intentional. Only the exact ranges 0.0.0.0/0 and ::/0 count as "the internet". Outbound
+  rules are not checked.
+references:
+  - title: Security group rules (Amazon VPC)
+    url: https://docs.aws.amazon.com/vpc/latest/userguide/security-group-rules.html
+  - title: Security group rules for different use cases (Amazon EC2)
+    url: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-rules-reference.html

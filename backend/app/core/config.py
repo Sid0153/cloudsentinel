@@ -5,12 +5,15 @@ startup instead of silently running with something guessable.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_SECRET_KEY_LENGTH = 32
+# security-rules/rules/ at the repository root. The Docker image sets RULES_DIR instead.
+DEFAULT_RULES_DIR = Path(__file__).resolve().parents[3] / "security-rules" / "rules"
 
 
 class Settings(BaseSettings):
@@ -26,6 +29,7 @@ class Settings(BaseSettings):
     database_url: str
     secret_key: str  # signs access tokens (JWT)
     cors_origins: str = "http://localhost:5173"  # comma-separated list
+    rules_dir: Path = DEFAULT_RULES_DIR  # rule metadata YAML files
 
     # Authentication tuning. The defaults are deliberate; change them only with a reason.
     access_token_expire_minutes: int = Field(default=15, ge=1, le=120)

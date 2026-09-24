@@ -2,10 +2,11 @@
 
 An AWS cloud security monitoring and misconfiguration detection platform (portfolio project).
 
-> **Status: Phase 4 of 10 (AWS integration).** CloudSentinel can register an AWS account, run a
-> read-only scan and store the discovered resources. There is **no security rule engine, risk
-> score or dashboard yet**: scans find resources, not problems. Those arrive in later phases;
-> this README will be rewritten in Phase 10 and will only describe what is actually implemented.
+> **Status: Phase 5 of 10 (security rule engine).** CloudSentinel can register an AWS account,
+> run a read-only scan, store the discovered resources and turn misconfigurations into findings
+> with evidence and remediation. There is **no risk score or dashboard yet** (findings are
+> available through the API only). This README will be rewritten in Phase 10 and will only
+> describe what is actually implemented.
 
 ## What exists today
 
@@ -27,6 +28,11 @@ An AWS cloud security monitoring and misconfiguration detection platform (portfo
   `FAILED`), and never treat a denied API call as a clean result
 - Least-privilege IAM policy: `infrastructure/cloudsentinel-readonly-policy.json`,
   explained in `docs/aws-permissions.md`
+- Security rule engine (API only, no UI yet): 8 rules (SSH/RDP/broad inbound access, public
+  and unencrypted S3 buckets, IAM users without MFA, broad IAM permissions, CloudTrail), listed
+  in `security-rules/README.md`. Findings are de-duplicated across scans, closed automatically
+  only when a scan proves the problem is gone, and can be triaged by analysts
+  (`GET/PATCH /api/findings`, `GET /api/rules`)
 
 ## Run with Docker
 
@@ -58,7 +64,8 @@ docker compose -f docker-compose.yml -f docker-compose.aws.yml up --build
 
 Using the API docs at http://localhost:8000/api/docs, register the account
 (`POST /api/aws-accounts`), verify it (`POST /api/aws-accounts/{id}/verify`), start a scan
-(`POST /api/scans`) and read the results (`GET /api/scans/{id}`, `GET /api/resources`).
+(`POST /api/scans`) and read the results (`GET /api/scans/{id}`, `GET /api/resources`,
+`GET /api/findings`).
 
 To wipe the database (for example after changing `POSTGRES_PASSWORD`): `docker compose down -v`.
 
@@ -98,8 +105,11 @@ In `frontend/`, `npm run dev` serves on http://localhost:5173 and proxies `/api`
 backend/         FastAPI app (app/), Alembic migrations (alembic/), tests (tests/)
   app/aws/       boto3 session, collectors (AWS calls) and normalizers (pure functions)
   app/scans/     scan orchestration and persistence
+  app/rules/     rule engine and checks (pure Python, no AWS or database code)
+  app/findings/  fingerprints, finding sync after each scan, triage
   app/domain/    typed resource models shared by everything else
 frontend/        React + TypeScript + Vite + Tailwind (src/), tests (tests/)
+security-rules/  rule metadata (one YAML file per rule) and the rule list
 docs/            architecture, security model, AWS permissions
 infrastructure/  least-privilege IAM policy
 docker-compose.yml, docker-compose.aws.yml (optional AWS access), .env.example

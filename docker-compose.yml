@@ -22,7 +22,10 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      additional_contexts:
+        security_rules: ./security-rules # rule metadata YAML, copied into the image
     environment:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

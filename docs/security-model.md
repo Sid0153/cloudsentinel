@@ -38,8 +38,8 @@
 
 - Every protected route depends on `get_current_user`; role checks use `require_role(...)`.
 - Roles: ADMIN (everything: users, AWS account registration and verification), ANALYST
-  (starts scans; will triage findings from Phase 5), VIEWER (read only: accounts, scans,
-  resources).
+  (starts scans; triages findings), VIEWER (read only: accounts, scans, resources, findings,
+  rules).
 - `tests/api/test_rbac.py` fails if any route lacks a declared access rule, and runs every
   protected route against every role.
 - Frontend route guards are a convenience only. The API is the enforcement point.
@@ -53,6 +53,8 @@
   to avoid this, but two tabs can still collide.
 - There is no email verification, password reset flow or MFA yet.
 - Audit logging of these events arrives in Phase 8 (events are only written to the app log now).
+  This includes finding status changes; the analyst's note is stored with the finding but not
+  written to the log.
 - Scans run as background tasks inside the API process. A restart loses a running scan; the
   container entrypoint marks such scans FAILED on the next start. This assumes one backend
   instance.
@@ -70,3 +72,15 @@
   (e.g. `AccessDenied (GetBucketAcl)`), never AWS's full message, which can contain ARNs.
 - The test suite replaces credentials with fake values and uses moto, so tests can never
   reach a real AWS account.
+
+## Rule engine and findings
+
+- Rule metadata is loaded with `yaml.safe_load`, which builds only plain data; a rule file cannot
+  run code (tested with a `!!python/object` payload).
+- Evidence is copied from the normalized configuration only (ports, CIDR ranges, grant names,
+  policy statement sources). No credentials, access key IDs or policy documents are stored in
+  findings; the credential report's root-account row is never collected.
+- Finding filters are bound parameters. The search text is escaped so `%` and `_` are literal,
+  and `sort` / `order` accept only a fixed list of values (anything else is a 422).
+- Only ANALYST and ADMIN can change a finding's status; VIEWER is read-only
+  (enforced by `require_role`, covered by `test_rbac.py`).

@@ -15,6 +15,11 @@ RUN addgroup --system app && adduser --system --ingroup app app
 COPY --chown=app:app app ./app
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app alembic.ini docker-entrypoint.sh ./
+# Rule metadata lives at the repository root, outside this build context. docker compose
+# passes it as the extra build context "security_rules" (see docker-compose.yml). Without
+# compose: docker build --build-context security_rules=security-rules backend
+COPY --chown=app:app --from=security_rules rules ./security-rules/rules
+ENV RULES_DIR=/app/security-rules/rules
 RUN chmod +x docker-entrypoint.sh
 
 USER app

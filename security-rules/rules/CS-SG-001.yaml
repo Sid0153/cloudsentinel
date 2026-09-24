@@ -1,0 +1,24 @@
+id: CS-SG-001
+title: Security group allows SSH from the internet
+category: NETWORK
+severity: HIGH
+description: >
+  An inbound rule lets any IPv4 (0.0.0.0/0) or IPv6 (::/0) address reach TCP port 22 (SSH),
+  either directly, through a port range that includes 22, or through an "all traffic" rule.
+rationale: >
+  SSH exposed to the whole internet is constantly scanned and brute-forced. A leaked or weak
+  key, or an unpatched SSH server, then gives an attacker a shell on the instance.
+remediation: |
+  1. In the EC2 console, open Security Groups and select the group.
+  2. Edit the inbound rules and remove the rule that allows port 22 from 0.0.0.0/0 or ::/0.
+  3. If SSH is still needed, allow it only from known addresses (for example your office or
+     VPN range), or remove SSH entirely and use AWS Systems Manager Session Manager.
+limitations: >
+  Only the exact ranges 0.0.0.0/0 and ::/0 count as "the internet". The finding is raised
+  whether or not the group is attached; attachments (EC2 instances only) are listed in the
+  evidence.
+references:
+  - title: Security group rules (Amazon VPC)
+    url: https://docs.aws.amazon.com/vpc/latest/userguide/security-group-rules.html
+  - title: AWS Systems Manager Session Manager
+    url: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html

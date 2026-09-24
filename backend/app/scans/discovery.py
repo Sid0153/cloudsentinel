@@ -15,6 +15,7 @@ from app.aws.normalizers.ec2 import normalize_ec2
 from app.aws.normalizers.iam import normalize_iam
 from app.aws.normalizers.s3 import normalize_s3
 from app.aws.raw import CallerIdentity
+from app.domain.coverage import Coverage, CoverageStatus
 from app.domain.resources import GLOBAL_REGION, AccountConfig, NormalizedResource, ResourceType
 
 logger = logging.getLogger(__name__)
@@ -22,16 +23,10 @@ logger = logging.getLogger(__name__)
 MAX_ERRORS_PER_SERVICE = 20
 
 
-class CoverageStatus:
-    SUCCEEDED = "SUCCEEDED"  # everything was read
-    PARTIAL = "PARTIAL"  # some calls failed; results for this service are incomplete
-    FAILED = "FAILED"  # nothing usable was read for this service
-
-
 @dataclass
 class Discovery:
     resources: list[NormalizedResource] = field(default_factory=list)
-    coverage: dict[str, dict[str, Any]] = field(default_factory=dict)
+    coverage: Coverage = field(default_factory=dict)
 
     @property
     def complete(self) -> bool:

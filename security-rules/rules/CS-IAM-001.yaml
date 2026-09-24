@@ -1,0 +1,28 @@
+id: CS-IAM-001
+title: IAM user with a console password has no MFA
+category: IDENTITY
+severity: MEDIUM
+severity_note: >
+  HIGH when the user also has broad permissions (the AdministratorAccess policy or a wildcard
+  statement, as defined by CS-IAM-002). MEDIUM otherwise, and also when the user's policies
+  could not be read (the evidence then shows "privileged": null).
+description: >
+  The IAM credential report shows the user can sign in to the AWS console with a password
+  but has no MFA device. Users without a console password are not affected by this rule.
+rationale: >
+  Without MFA, a single phished, reused or guessed password gives full console access with
+  all of the user's permissions.
+remediation: |
+  1. Ask the user to register an MFA device (a passkey or security key, or an authenticator
+     app) under IAM, Users, Security credentials.
+  2. Consider a policy that denies most actions unless aws:MultiFactorAuthPresent is true.
+  3. Better still, replace IAM users with IAM Identity Center (SSO) so MFA is enforced
+     centrally.
+limitations: >
+  Based on the IAM credential report, which AWS may have generated up to four hours before
+  the scan. The root user is not evaluated. MFA for API or CLI use is not checked.
+references:
+  - title: AWS Multi-factor authentication in IAM
+    url: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa.html
+  - title: Security best practices in IAM
+    url: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html
