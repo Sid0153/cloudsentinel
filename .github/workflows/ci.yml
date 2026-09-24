@@ -37,7 +37,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql+psycopg://ci:ci-only-throwaway@localhost:5432/cloudsentinel_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -63,7 +63,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -86,7 +86,7 @@ jobs:
     name: Secret scan (gitleaks, full history)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # every commit, so a secret removed later is still found
       - name: Scan for committed secrets
@@ -98,7 +98,7 @@ jobs:
     name: Docker Compose smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create .env with generated throwaway values
         run: |
           cp .env.example .env
