@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 # npm ci installs exactly what package-lock.json records (versions and integrity hashes).
