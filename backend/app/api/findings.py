@@ -97,8 +97,8 @@ def change_finding_status(
     again reopens it; ACKNOWLEDGED and FALSE_POSITIVE are kept."""
     finding = _get_or_404(db, finding_id)
     previous = finding.status
-    update_finding_status(db, finding, payload.status, payload.note, user.id)
-    # Written to the audit log table from Phase 8; the note itself is not logged.
+    update_finding_status(db, finding, payload.status, payload.note, user)
+    # Also in the audit log (FINDING_STATUS_CHANGED); the note itself is not logged.
     logger.info(
         "Finding %s status changed from %s to %s by user %s",
         finding.id,

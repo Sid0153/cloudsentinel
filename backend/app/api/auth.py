@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import DbSession, SettingsDep
+from app.audit.events import AuditAction, AuditOutcome, TargetType
+from app.audit.service import record
 from app.auth.deps import CurrentUser
 from app.auth.passwords import hash_password, verify_password
 from app.auth.service import (
@@ -76,6 +78,8 @@ def login(
     ip = _client_ip(request)
     if not limiter.allow(ip):
         logger.warning("Login rate limit hit from %s", ip)
+        record(db, AuditAction.LOGIN_RATE_LIMITED, outcome=AuditOutcome.FAILURE)
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Try again in a minute.",
@@ -142,12 +146,30 @@ def change_password(
     payload: ChangePasswordRequest, user: CurrentUser, db: DbSession, settings: SettingsDep
 ) -> Response:
     if not verify_password(user.password_hash, payload.current_password):
+        record(
+            db,
+            AuditAction.PASSWORD_CHANGED,
+            outcome=AuditOutcome.FAILURE,
+            actor=user,
+            target_type=TargetType.USER,
+            target_id=user.id,
+            details={"reason": "wrong_current_password"},
+        )
+        db.commit()
         # 400, not 401: a 401 would make the frontend think the session expired.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
         )
     user.password_hash = hash_password(payload.new_password)
     revoke_all_for_user(db, user.id)  # every other device must sign in again
+    record(
+        db,
+        AuditAction.PASSWORD_CHANGED,
+        actor=user,
+        target_type=TargetType.USER,
+        target_id=user.id,
+        details={"sessions_revoked": True},
+    )
     db.commit()
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     _clear_refresh_cookie(response, settings)

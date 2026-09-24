@@ -3,10 +3,12 @@
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.audit.events import AuditAction, AuditOutcome, TargetType
+from app.audit.service import record
 from app.auth.tokens import InvalidTokenError, decode_access_token
 from app.core.config import Settings, get_settings
 from app.database.session import get_db
@@ -42,9 +44,27 @@ def get_current_user(
     return user
 
 
-def require_role(*allowed: Role) -> Callable[[User], User]:
-    def dependency(user: Annotated[User, Depends(get_current_user)]) -> User:
+def require_role(*allowed: Role) -> Callable[..., User]:
+    def dependency(
+        request: Request,
+        user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[Session, Depends(get_db)],
+    ) -> User:
         if user.role not in allowed:
+            # A signed-in user probing routes above their role is worth an admin's attention.
+            record(
+                db,
+                AuditAction.ACCESS_DENIED,
+                outcome=AuditOutcome.FAILURE,
+                actor=user,
+                target_type=TargetType.ROUTE,
+                details={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "role": str(user.role),
+                },
+            )
+            db.commit()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
             )

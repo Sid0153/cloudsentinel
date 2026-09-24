@@ -5,6 +5,9 @@ from app.core.redaction import RedactingFilter
 
 # Set per request by RequestContextMiddleware so every log line can be tied to one request.
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
+# The caller's IP for the current request (None outside a request, e.g. a background scan).
+# Audit records read both, so services do not need the request object passed in.
+client_ip_var: ContextVar[str | None] = ContextVar("client_ip", default=None)
 
 
 class RequestIdFilter(logging.Filter):

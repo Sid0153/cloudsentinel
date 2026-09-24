@@ -135,9 +135,7 @@ Automatic changes have `status_updated_by_id = NULL` and a short note; analyst c
 - Rule metadata is read once at startup; changing a YAML file needs a restart.
 - Findings keep the title and severity of the latest detection. If a rule's text changes, open
   findings pick it up at the next scan; closed ones keep the old text.
-- No audit log table yet (Phase 8; status changes go to the application log), and no UI for
-  findings yet (Phase 7). Risk scoring limitations are in `docs/risk-model.md`.
-- The list endpoint returns a page (`limit`/`offset`) without a total count.
+- Risk scoring limitations are in `docs/risk-model.md`.
 
 ## Dashboard (Phase 7)
 
@@ -169,6 +167,40 @@ its own beyond the access token in memory.
 Known limitations: no dark mode; no charts over time (scan-to-scan trends); the rule catalog is
 read-only in the UI; admins cannot edit or delete AWS accounts from the UI yet.
 
+## Audit log (Phase 8)
+
+`audit_logs` is an append-only record of security-relevant actions, readable by ADMIN only
+(`GET /api/audit-logs`, the Audit log page).
+
+| Area | Events |
+|---|---|
+| Authentication | LOGIN_SUCCEEDED, LOGIN_FAILED (with reason), LOGIN_RATE_LIMITED, ACCOUNT_LOCKED, LOGOUT, PASSWORD_CHANGED (success or wrong current password), REFRESH_TOKEN_REUSED |
+| Authorization | ACCESS_DENIED (a signed-in user called a route above their role) |
+| Administration | USER_CREATED, USER_UPDATED (role / active flag, from and to), AWS_ACCOUNT_REGISTERED, AWS_ACCOUNT_VERIFIED |
+| Scanning | SCAN_STARTED, SCAN_COMPLETED, SCAN_FAILED (including scans interrupted by a restart) |
+| Findings | FINDING_STATUS_CHANGED (by an analyst: from, to, whether a note was given) |
+
+Each record has the time, action, outcome (SUCCESS / FAILURE), actor (user ID and email at the
+time; empty for anonymous or system events), target (type and ID), client IP, request ID (the
+same ID as in the application log and the `X-Request-ID` header) and safe details.
+
+- **Same transaction as the action.** `audit.record()` only adds the row; the caller's commit
+  saves the change and its record together. Failure events (where nothing else changes) are
+  committed right away.
+- **Append-only in the database.** Triggers from migration 0006 reject UPDATE, DELETE and
+  TRUNCATE on the table, whatever the code does. The actor foreign key has no ON DELETE action,
+  so a user with audit history cannot be deleted (CloudSentinel only deactivates users).
+- **No secrets.** Details are built from explicit fields per event; `sanitize()` then drops any
+  key that looks like a password, token, secret or key, redacts secret-looking values and caps
+  sizes. Failed logins never store the submitted email; finding notes stay on the finding.
+- The request context (IP, request ID) comes from `RequestContextMiddleware` through context
+  variables, so services do not need the HTTP request passed in.
+
+Not recorded: successful token refreshes and unauthenticated 401s (too frequent to be useful),
+reads (who viewed which finding), and status changes made by scans (automatic resolve and reopen:
+the finding's `status_note` and the scan record show them). There is no retention policy or
+export yet; the table grows until an operator archives it.
+
 ## Decisions
 
 | Decision | Why |
@@ -198,3 +230,6 @@ read-only in the UI; admins cannot edit or delete AWS accounts from the UI yet.
 | Totals in `X-Total-Count`, bodies stay plain lists | Pagination without changing the shape of existing list responses |
 | Finding filters stored in the URL | Shareable, bookmarkable views; the back button works |
 | No chart or state-management library | A few bar lists and fetch hooks do not justify the dependencies |
+| Audit rows written in the same transaction as the action | An action is never saved without its record, or the reverse |
+| Append-only enforced by database triggers, not only by the API | Holds against bugs and direct SQL as the application user |
+| Real failure reason stored, generic message returned | Admins can tell brute force from a locked account; attackers learn nothing |

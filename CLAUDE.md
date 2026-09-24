@@ -16,7 +16,8 @@ something works without verifying it, and end each phase with the interview-lear
 | 5 Security rule engine | Done, green in CI (334 backend tests). 8 rules, findings API |
 | 6 Risk engine | Done, green in CI (378 backend tests). docs/risk-model.md |
 | 7 Dashboard | Done, green in CI (387 backend, 53 frontend tests). Visually checked desktop + phone |
-| 8 Audit logging | NEXT. Wait for the user to say "Proceed to Phase 8" |
+| 8 Audit logging | Done locally; not yet pushed to CI |
+| 9 Quality / DevOps | NEXT. Wait for the user to say "Proceed to Phase 9" |
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
 (Phase 5): checks in `backend/app/rules/checks/`, listed in `registry.py`, metadata in
@@ -50,6 +51,9 @@ green after pushing.
 - Readable code over clever code, small modules, few dependencies.
 - Tests: moto for AWS (it does not load AWS-managed policies and does not implement
   GetBucketPolicyStatus; tests use the `policy_status` fixture), real PostgreSQL for API tests.
+- Security-relevant actions call `app.audit.service.record()` before the commit that saves the
+  change (same transaction). Never put secrets in `details`. `audit_logs` is append-only (DB
+  triggers): tests must not try to clean it up with DELETE.
 - Every new API route must be added to `EXPECTED_ACCESS` or `PUBLIC_ROUTES` in
   `backend/tests/api/test_rbac.py`.
 - New rules need a check, a `registry.py` entry, a YAML file, a risk profile and tests (see

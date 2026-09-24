@@ -171,3 +171,17 @@ export interface DashboardSummary {
   latest_scan: Scan | null;
   top_risks: FindingSummary[];
 }
+
+export interface AuditLogEntry {
+  id: string;
+  created_at: string;
+  action: string;
+  outcome: "SUCCESS" | "FAILURE";
+  actor_id: string | null;
+  actor_email: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  ip_address: string | null;
+  request_id: string | null;
+  details: Record<string, unknown>;
+}

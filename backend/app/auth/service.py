@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.audit.events import AuditAction, AuditOutcome, TargetType
+from app.audit.service import record
 from app.auth.passwords import verify_against_dummy, verify_password
 from app.auth.tokens import (
     create_access_token,
@@ -25,6 +27,24 @@ class InvalidRefreshTokenError(Exception):
     """The refresh token is unknown, expired, revoked or belongs to a disabled user."""
 
 
+def _login_failed(db: Session, user: User | None, reason: str) -> InvalidCredentialsError:
+    """Records the failure (and commits) and returns the error to raise.
+
+    The audit record keeps the real reason for admins; the API caller still gets one generic
+    message. The submitted email is never stored: people sometimes type a password into it.
+    """
+    record(
+        db,
+        AuditAction.LOGIN_FAILED,
+        outcome=AuditOutcome.FAILURE,
+        target_type=TargetType.USER if user else None,
+        target_id=user.id if user else None,
+        details={"reason": reason},
+    )
+    db.commit()
+    return InvalidCredentialsError()
+
+
 def authenticate(db: Session, email: str, password: str, settings: Settings) -> User:
     now = datetime.now(UTC)
     # FOR UPDATE serializes concurrent attempts, so the failure counter cannot be skipped.
@@ -32,26 +52,36 @@ def authenticate(db: Session, email: str, password: str, settings: Settings) -> 
 
     if user is None:
         verify_against_dummy(password)
-        raise InvalidCredentialsError
+        raise _login_failed(db, None, "unknown_email")
 
     if user.locked_until is not None and user.locked_until > now:
         verify_against_dummy(password)
-        raise InvalidCredentialsError
+        raise _login_failed(db, user, "account_locked")
 
     if not verify_password(user.password_hash, password):
         user.failed_login_count += 1
         if user.failed_login_count >= settings.max_failed_logins:
             user.locked_until = now + timedelta(minutes=settings.lockout_minutes)
             user.failed_login_count = 0
-        db.commit()
-        raise InvalidCredentialsError
+            record(
+                db,
+                AuditAction.ACCOUNT_LOCKED,
+                outcome=AuditOutcome.FAILURE,
+                target_type=TargetType.USER,
+                target_id=user.id,
+                details={"minutes": settings.lockout_minutes},
+            )
+        raise _login_failed(db, user, "wrong_password")
 
     if not user.is_active:
-        raise InvalidCredentialsError
+        raise _login_failed(db, user, "account_disabled")
 
     user.failed_login_count = 0
     user.locked_until = None
     user.last_login_at = now
+    record(
+        db, AuditAction.LOGIN_SUCCEEDED, actor=user, target_type=TargetType.USER, target_id=user.id
+    )
     db.commit()
     return user
 
@@ -107,6 +137,14 @@ def rotate_session(
         # A token that was already rotated or revoked is being replayed. Assume it was
         # stolen and end every session of this user.
         revoke_all_for_user(db, row.user_id, now)
+        record(
+            db,
+            AuditAction.REFRESH_TOKEN_REUSED,
+            outcome=AuditOutcome.FAILURE,
+            target_type=TargetType.USER,
+            target_id=row.user_id,
+            details={"sessions_revoked": True},
+        )
         db.commit()
         raise InvalidRefreshTokenError
 
@@ -124,9 +162,17 @@ def rotate_session(
 
 
 def revoke_refresh_token(db: Session, presented_token: str) -> None:
+    """Logout: ends the session this refresh token belongs to."""
     row = db.scalar(
         select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(presented_token))
     )
     if row is not None and row.revoked_at is None:
         row.revoked_at = datetime.now(UTC)
+        record(
+            db,
+            AuditAction.LOGOUT,
+            actor=db.get(User, row.user_id),
+            target_type=TargetType.USER,
+            target_id=row.user_id,
+        )
         db.commit()

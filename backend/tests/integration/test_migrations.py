@@ -40,11 +40,19 @@ def test_upgrade_and_downgrade() -> None:
     try:
         command.upgrade(config, "head")
         tables = set(inspect(engine).get_table_names())
-        expected = {"users", "refresh_tokens", "aws_accounts", "scans", "resources", "findings"}
+        expected = {
+            "users",
+            "refresh_tokens",
+            "aws_accounts",
+            "scans",
+            "resources",
+            "findings",
+            "audit_logs",
+        }
         assert expected | {"alembic_version"} <= tables
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0005"
+        assert version == "0006"
 
         command.downgrade(config, "base")
         remaining = set(inspect(engine).get_table_names())

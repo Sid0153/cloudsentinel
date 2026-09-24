@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import RequireRole from "./auth/RequireRole";
 import AppLayout from "./layouts/AppLayout";
+import AuditLogPage from "./pages/AuditLogPage";
 import DashboardPage from "./pages/DashboardPage";
 import FindingDetailPage from "./pages/FindingDetailPage";
 import FindingsPage from "./pages/FindingsPage";
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route element={<RequireRole allowed={["ADMIN"]} />}>
             <Route path="users" element={<UsersPage />} />
+            <Route path="audit" element={<AuditLogPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

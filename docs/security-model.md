@@ -52,9 +52,10 @@
   token replay and sign the user out. The frontend shares a single in-flight refresh per tab
   to avoid this, but two tabs can still collide.
 - There is no email verification, password reset flow or MFA yet.
-- Audit logging of these events arrives in Phase 8 (events are only written to the app log now).
-  This includes finding status changes; the analyst's note is stored with the finding but not
-  written to the log.
+- Security events (logins, lockouts, logouts, password changes, token reuse, access denied,
+  user and AWS account changes, scans, finding triage) are written to the append-only audit log;
+  see "Audit log" in `docs/architecture.md`. Passwords, tokens and the email typed into a failed
+  login are never stored, and a finding's note stays on the finding.
 - Scans run as background tasks inside the API process. A restart loses a running scan; the
   container entrypoint marks such scans FAILED on the next start. This assumes one backend
   instance.

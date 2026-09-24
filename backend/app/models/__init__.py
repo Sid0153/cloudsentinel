@@ -1,3 +1,4 @@
+from app.models.audit_log import AuditLog
 from app.models.aws_account import AwsAccount
 from app.models.finding import ACTIVE_FINDING_STATUSES, Finding, FindingStatus
 from app.models.refresh_token import RefreshToken
@@ -8,6 +9,7 @@ from app.models.user import Role, User
 __all__ = [
     "ACTIVE_FINDING_STATUSES",
     "ACTIVE_STATUSES",
+    "AuditLog",
     "AwsAccount",
     "Finding",
     "FindingStatus",

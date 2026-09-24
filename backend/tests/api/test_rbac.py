@@ -45,6 +45,7 @@ EXPECTED_ACCESS: dict[Route, Role | None] = {
     ("PATCH", "/api/findings/{finding_id}"): Role.ANALYST,
     ("GET", "/api/rules"): None,
     ("GET", "/api/dashboard/summary"): None,
+    ("GET", "/api/audit-logs"): Role.ADMIN,
 }
 
 _RANK = {Role.VIEWER: 1, Role.ANALYST: 2, Role.ADMIN: 3}

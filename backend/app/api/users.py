@@ -32,7 +32,7 @@ def list_all_users(
 @router.post("", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 def create_new_user(payload: UserCreate, _admin: AdminUser, db: DbSession) -> User:
     try:
-        return create_user(db, payload.email, payload.password, payload.role)
+        return create_user(db, payload.email, payload.password, payload.role, actor=_admin)
     except EmailAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A user with this email already exists"
@@ -44,7 +44,7 @@ def update_existing_user(
     user_id: uuid.UUID, payload: UserUpdate, admin: AdminUser, db: DbSession
 ) -> User:
     try:
-        return update_user(db, admin.id, user_id, payload.role, payload.is_active)
+        return update_user(db, admin, user_id, payload.role, payload.is_active)
     except SelfModificationError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

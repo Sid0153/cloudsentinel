@@ -10,11 +10,14 @@ from datetime import UTC, datetime
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.audit.events import AuditAction, AuditOutcome, TargetType
+from app.audit.service import record
 from app.aws.common import AWS_ERRORS, error_label
 from app.aws.session import SessionBuilder, get_caller_identity
 from app.findings.sync import ScanScope, sync_findings
 from app.models.aws_account import AwsAccount
 from app.models.scan import ACTIVE_STATUSES, Scan, ScanStatus
+from app.models.user import User
 from app.risk.scoring import summarize
 from app.rules.engine import evaluate
 from app.rules.model import Rule
@@ -57,6 +60,15 @@ def create_scan(db: Session, aws_account_id: uuid.UUID, triggered_by_id: uuid.UU
         raise ScanAlreadyActiveError
     scan = Scan(aws_account_id=account.id, triggered_by_id=triggered_by_id)
     db.add(scan)
+    db.flush()
+    record(
+        db,
+        AuditAction.SCAN_STARTED,
+        actor=db.get(User, triggered_by_id),
+        target_type=TargetType.SCAN,
+        target_id=scan.id,
+        details={"aws_account_id": account.account_id, "regions": list(account.regions)},
+    )
     db.commit()
     return scan
 
@@ -65,6 +77,20 @@ def _finish(db: Session, scan: Scan, status: ScanStatus, error: str | None = Non
     scan.status = status
     scan.error_summary = error
     scan.finished_at = _now()
+    # Recorded as a system event (no actor); the person who started it is in SCAN_STARTED.
+    record(
+        db,
+        AuditAction.SCAN_FAILED if status == ScanStatus.FAILED else AuditAction.SCAN_COMPLETED,
+        outcome=AuditOutcome.FAILURE if status == ScanStatus.FAILED else AuditOutcome.SUCCESS,
+        target_type=TargetType.SCAN,
+        target_id=scan.id,
+        details={
+            "status": str(status),
+            "resource_count": scan.resource_count,
+            "finding_count": scan.finding_count,
+            "error": error,
+        },
+    )
     db.commit()
 
 
@@ -166,10 +192,22 @@ def reconcile_stale_scans(db: Session) -> int:
     Background tasks live inside the API process, so a restart loses them. This runs at
     startup (single backend instance assumed; see docs/architecture.md).
     """
-    result = db.execute(
+    stale = list(db.scalars(select(Scan.id).where(Scan.status.in_(ACTIVE_STATUSES))))
+    if not stale:
+        return 0
+    db.execute(
         update(Scan)
-        .where(Scan.status.in_(ACTIVE_STATUSES))
+        .where(Scan.id.in_(stale))
         .values(status=ScanStatus.FAILED, error_summary=INTERRUPTED_MESSAGE, finished_at=_now())
     )
+    for scan_id in stale:
+        record(
+            db,
+            AuditAction.SCAN_FAILED,
+            outcome=AuditOutcome.FAILURE,
+            target_type=TargetType.SCAN,
+            target_id=scan_id,
+            details={"status": str(ScanStatus.FAILED), "error": INTERRUPTED_MESSAGE},
+        )
     db.commit()
-    return int(getattr(result, "rowcount", 0) or 0)
+    return len(stale)

@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.core.logging import request_id_var
+from app.core.logging import client_ip_var, request_id_var
 
 # Only accept a caller-supplied request ID if it is short and boring; otherwise a client
 # could inject newlines or huge strings into our logs.
@@ -24,10 +24,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request_id = supplied if _SAFE_REQUEST_ID.match(supplied) else str(uuid.uuid4())
         request.state.request_id = request_id
         token = request_id_var.set(request_id)
+        # uvicorn has already applied X-Forwarded-For from trusted proxies (FORWARDED_ALLOW_IPS).
+        ip_token = client_ip_var.set(request.client.host if request.client else None)
         try:
             response = await call_next(request)
         finally:
             request_id_var.reset(token)
+            client_ip_var.reset(ip_token)
 
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"

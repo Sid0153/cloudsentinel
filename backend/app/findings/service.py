@@ -8,8 +8,11 @@ from typing import Any, Literal
 from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.audit.events import AuditAction, TargetType
+from app.audit.service import record
 from app.domain.resources import ResourceType
 from app.models.finding import Finding, FindingStatus
+from app.models.user import User
 from app.rules.model import Category, Severity
 
 SortField = Literal[
@@ -109,13 +112,29 @@ def update_finding_status(
     finding: Finding,
     status: FindingStatus,
     note: str | None,
-    user_id: uuid.UUID,
+    actor: User,
 ) -> Finding:
     now = datetime.now(UTC)
+    previous = finding.status
     finding.status = status
     finding.status_note = note
     finding.status_updated_at = now
-    finding.status_updated_by_id = user_id
+    finding.status_updated_by_id = actor.id
     finding.resolved_at = now if status == FindingStatus.RESOLVED else None
+    # The note stays on the finding; the audit record only says whether one was given.
+    record(
+        db,
+        AuditAction.FINDING_STATUS_CHANGED,
+        actor=actor,
+        target_type=TargetType.FINDING,
+        target_id=finding.id,
+        details={
+            "rule_id": finding.rule_id,
+            "resource_id": finding.resource_id,
+            "from": str(previous),
+            "to": str(status),
+            "note_provided": bool(note),
+        },
+    )
     db.commit()
     return finding
