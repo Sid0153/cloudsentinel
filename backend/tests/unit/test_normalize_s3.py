@@ -77,7 +77,7 @@ def test_failed_checks_are_reported_as_unknown_not_as_safe_or_unsafe() -> None:
 
 
 def test_authenticated_users_grant_counts_as_public() -> None:
-    grants = [
+    grants: list[dict[str, Any]] = [
         {
             "Grantee": {
                 "Type": "Group",
