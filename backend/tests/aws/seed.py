@@ -5,7 +5,11 @@ from typing import Any
 
 import boto3
 
-ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
+# moto does not load AWS-managed policies (such as AdministratorAccess) by default, so the
+# seed uses a customer-managed policy with the same effect.
+FULL_ACCESS_POLICY = (
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}'
+)
 
 
 @dataclass
@@ -92,7 +96,10 @@ def seed_environment() -> Seeded:
             '"Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
         ),
     )
-    iam.attach_role_policy(RoleName="ops-admin", PolicyArn=ADMIN_POLICY_ARN)
+    policy_arn = iam.create_policy(
+        PolicyName="ops-full-access", PolicyDocument=FULL_ACCESS_POLICY
+    )["Policy"]["Arn"]
+    iam.attach_role_policy(RoleName="ops-admin", PolicyArn=policy_arn)
 
     cloudtrail = boto3.client("cloudtrail", region_name="us-east-1")
     trail = cloudtrail.create_trail(

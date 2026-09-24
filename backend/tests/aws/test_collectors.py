@@ -128,7 +128,10 @@ def test_iam_users_roles_mfa_and_broad_permissions() -> None:
 
     role = resources["ops-admin"].config
     assert isinstance(role, IamRoleConfig)
-    assert role.uses_admin_managed_policy is True
+    # The customer-managed policy's document was fetched and analyzed.
+    assert [(s.source.split(":policy/")[-1], s.actions) for s in role.broad_statements] == [
+        ("ops-full-access", ["*"])
+    ]
 
 
 def test_cloudtrail_multi_region_trail_is_found_once_and_logging() -> None:
