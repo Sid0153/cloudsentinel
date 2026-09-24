@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -47,7 +49,7 @@ def test_api_docs_disabled_in_production() -> None:
     settings = make_settings(
         app_env="production",
         database_url="postgresql+psycopg://u:p@localhost/db",
-        secret_key="prod-like-key-0123456789-abcdefghijklmnop",
+        secret_key=secrets.token_urlsafe(32),
         cors_origins="https://sentinel.example",
     )
     with TestClient(create_app(settings)) as test_client:

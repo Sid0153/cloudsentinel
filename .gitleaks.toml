@@ -8,4 +8,7 @@ description = "Fake credentials used by tests"
 regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',  # AWS's own documentation example key ID
   '''AKIAABCDEFGHIJKLMNOP''',
+  # A fake SECRET_KEY that a test used in commit 17aea5f (tests now generate keys at runtime).
+  # History cannot be rewritten on main, so the exact value is allowed; nothing else is.
+  '''test-key-0123456789-abcdefghijklmnopq''',
 ]

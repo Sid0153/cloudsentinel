@@ -1,3 +1,5 @@
+import secrets
+
 import pytest
 from pydantic import ValidationError
 
@@ -5,7 +7,8 @@ from app.core.config import Settings
 from tests.helpers import make_settings
 
 _DB = "postgresql+psycopg://u:p@localhost/db"
-_GOOD_KEY = "test-key-0123456789-abcdefghijklmnopq"
+# Generated per run: a key-like literal in the source would trip the secret scanner.
+_GOOD_KEY = secrets.token_urlsafe(32)
 
 
 def _settings(**overrides: str) -> Settings:
