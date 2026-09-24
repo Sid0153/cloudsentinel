@@ -48,6 +48,10 @@ class Finding(Base):
     category: Mapped[str] = mapped_column(sa.String(32))
     severity: Mapped[str] = mapped_column(sa.String(16), index=True)
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    # Deterministic 0-100 score from severity, exposure, impact and confidence, recomputed on
+    # every detection. The breakdown explains each part (see docs/risk-model.md).
+    risk_score: Mapped[int | None] = mapped_column(index=True)
+    risk_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # Copied from the resource (they are part of its identity and never change) so findings
     # can be filtered without a join.

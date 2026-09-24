@@ -44,7 +44,7 @@ def test_upgrade_and_downgrade() -> None:
         assert expected | {"alembic_version"} <= tables
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0004"
+        assert version == "0005"
 
         command.downgrade(config, "base")
         remaining = set(inspect(engine).get_table_names())

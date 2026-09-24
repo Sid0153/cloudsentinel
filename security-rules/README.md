@@ -42,4 +42,6 @@ at (`limitations`).
    or listed in `unknown_checks`.
 2. Add it to `ALL_CHECKS` in `backend/app/rules/registry.py`.
 3. Add `security-rules/rules/CS-AREA-NNN.yaml` (copy an existing file).
-4. Add tests with secure, vulnerable and unknown cases in `backend/tests/unit/`.
+4. Add a risk profile to `PROFILES` in `backend/app/risk/profiles.py` (see
+   `docs/risk-model.md`). Put anything the score needs into the evidence.
+5. Add tests with secure, vulnerable and unknown cases in `backend/tests/unit/`.

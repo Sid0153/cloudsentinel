@@ -15,6 +15,7 @@ from app.aws.session import SessionBuilder, get_caller_identity
 from app.findings.sync import ScanScope, sync_findings
 from app.models.aws_account import AwsAccount
 from app.models.scan import ACTIVE_STATUSES, Scan, ScanStatus
+from app.risk.scoring import summarize
 from app.rules.engine import evaluate
 from app.rules.model import Rule
 from app.scans.discovery import discover
@@ -106,9 +107,10 @@ def _run(
         coverage=discovery.coverage,
         now=now,
     )
-    finding_counts = sync_findings(db, scope, evaluation, rows)
-    scan.finding_counts = finding_counts
-    scan.finding_count = sum(finding_counts.values())
+    synced = sync_findings(db, scope, evaluation, rows)
+    scan.finding_counts = synced.finding_counts
+    scan.finding_count = sum(synced.finding_counts.values())
+    scan.risk_summary = summarize(synced.risk_scores)
     scan.rule_results = evaluation.rule_results
 
     complete = discovery.complete and not evaluation.had_errors

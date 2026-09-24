@@ -57,6 +57,11 @@ class Scan(Base):
     finding_counts: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=sa.text("'{}'::jsonb")
     )
+    # Highest risk score and findings per priority band (P1-P4) among this scan's detections,
+    # leaving out findings an analyst marked FALSE_POSITIVE.
+    risk_summary: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=sa.text("'{}'::jsonb")
+    )
     # Per rule: PASSED / FAILED / INCOMPLETE / NOT_APPLICABLE / ERROR and counts.
     rule_results: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=sa.text("'{}'::jsonb")

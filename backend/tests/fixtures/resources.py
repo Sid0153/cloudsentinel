@@ -13,6 +13,7 @@ from app.domain.resources import (
     AccountConfig,
     BroadStatement,
     CloudTrailConfig,
+    Ec2InstanceConfig,
     IamRoleConfig,
     IamUserConfig,
     IpPermission,
@@ -71,6 +72,23 @@ def security_group(
     )
     return NormalizedResource(
         ResourceType.SECURITY_GROUP, group_id, REGION, "test", replace(config, **overrides)
+    )
+
+
+def instance(
+    instance_id: str = "i-1", region: str = REGION, **overrides: Any
+) -> NormalizedResource:
+    config = Ec2InstanceConfig(
+        state="running",
+        instance_type="t3.micro",
+        public_ip="203.0.113.5",
+        private_ip="10.0.0.5",
+        vpc_id="vpc-1",
+        subnet_id="subnet-1",
+        security_group_ids=["sg-1"],
+    )
+    return NormalizedResource(
+        ResourceType.EC2_INSTANCE, instance_id, region, None, replace(config, **overrides)
     )
 
 

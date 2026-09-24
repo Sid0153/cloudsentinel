@@ -54,6 +54,7 @@ class FindingSummary(BaseModel):
     title: str
     category: Category
     severity: Severity
+    risk_score: int | None  # 0-100; None until a scan scores it (findings older than Phase 6)
     status: FindingStatus
     resource_type: str
     resource_id: str
@@ -65,6 +66,7 @@ class FindingSummary(BaseModel):
 
 class FindingDetail(FindingSummary):
     evidence: dict[str, Any]
+    risk_breakdown: dict[str, Any] | None  # points and reason for each factor
     status_note: str | None
     status_updated_at: datetime | None
     status_updated_by_id: uuid.UUID | None  # None with a status_updated_at: changed by a scan

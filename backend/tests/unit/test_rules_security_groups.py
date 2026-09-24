@@ -9,7 +9,7 @@ from app.rules.checks.security_groups import (
     unrestricted_ssh,
 )
 from app.rules.model import OutcomeStatus, RuleCheck, Severity
-from tests.fixtures.resources import context, inbound, security_group
+from tests.fixtures.resources import context, inbound, instance, security_group
 
 ANYWHERE = ["0.0.0.0/0"]
 ANYWHERE_V6 = ["::/0"]
@@ -141,3 +141,22 @@ def test_missing_ports_on_tcp_are_treated_as_all_ports() -> None:
     outcome = broad_inbound_access.evaluate(group, context(group))
     assert outcome.severity == Severity.HIGH
     assert unrestricted_ssh.evaluate(group, context(group)).status == OutcomeStatus.FAIL
+
+
+# --- Evidence used by the risk engine ----------------------------------------------------
+
+
+def test_internet_facing_instances_are_running_with_a_public_ip_in_the_same_region() -> None:
+    group = security_group(
+        inbound("tcp", 22, v4=ANYWHERE), attached_instance_ids=["i-1", "i-2", "i-3", "i-4"]
+    )
+    instances = [
+        instance("i-1"),  # running, public IP: internet-facing
+        instance("i-2", public_ip=None),  # private only
+        instance("i-3", state="stopped", public_ip=None),
+        instance("i-4", region="eu-west-1"),  # same ID in another region: not this group's
+        instance("i-9"),  # public, but not attached to the group
+    ]
+    outcome = unrestricted_ssh.evaluate(group, context(group, *instances))
+    assert outcome.evidence["internet_facing_instance_ids"] == ["i-1"]
+    assert outcome.evidence["attached_instance_ids"] == ["i-1", "i-2", "i-3", "i-4"]

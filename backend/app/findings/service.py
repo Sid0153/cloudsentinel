@@ -12,7 +12,9 @@ from app.domain.resources import ResourceType
 from app.models.finding import Finding, FindingStatus
 from app.rules.model import Category, Severity
 
-SortField = Literal["severity", "last_detected", "first_detected", "rule_id", "resource_id"]
+SortField = Literal[
+    "risk", "severity", "last_detected", "first_detected", "rule_id", "resource_id"
+]
 SortOrder = Literal["asc", "desc"]
 
 # Sort severity by rank, not alphabetically. Unknown values sort lowest.
@@ -31,6 +33,7 @@ class FindingFilters:
     rule_id: str | None = None
     region: str | None = None
     search: str | None = None  # matched against title, rule ID and resource ID
+    min_risk: int | None = None
 
 
 def _escape_like(text: str) -> str:
@@ -53,6 +56,8 @@ def _apply_filters(statement: Select[Any], filters: FindingFilters) -> Select[An
         statement = statement.where(Finding.rule_id == filters.rule_id)
     if filters.region is not None:
         statement = statement.where(Finding.region == filters.region)
+    if filters.min_risk is not None:
+        statement = statement.where(Finding.risk_score >= filters.min_risk)
     if filters.search:
         pattern = f"%{_escape_like(filters.search)}%"
         statement = statement.where(
@@ -68,12 +73,13 @@ def _apply_filters(statement: Select[Any], filters: FindingFilters) -> Select[An
 def list_findings(
     db: Session,
     filters: FindingFilters,
-    sort: SortField = "severity",
+    sort: SortField = "risk",
     order: SortOrder = "desc",
     limit: int = 100,
     offset: int = 0,
 ) -> list[Finding]:
     columns = {
+        "risk": Finding.risk_score,
         "severity": _SEVERITY_RANK,
         "last_detected": Finding.last_detected,
         "first_detected": Finding.first_detected,
@@ -81,7 +87,8 @@ def list_findings(
         "resource_id": Finding.resource_id,
     }
     column = columns[sort]
-    primary = column.desc() if order == "desc" else column.asc()
+    # Unscored findings (NULL risk) always sort last.
+    primary = column.desc().nulls_last() if order == "desc" else column.asc().nulls_last()
     # Secondary keys make the order (and therefore pagination) stable.
     statement = _apply_filters(select(Finding), filters).order_by(
         primary, Finding.last_detected.desc(), Finding.id

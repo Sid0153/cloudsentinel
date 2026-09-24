@@ -366,3 +366,77 @@ def test_rules_endpoint_lists_the_catalog(db_client: TestClient, viewer: User) -
     assert ssh["severity"] == "HIGH"
     assert ssh["resource_types"] == ["AWS::EC2::SecurityGroup"]
     assert ssh["remediation"] and ssh["limitations"]
+
+
+# --- Risk (Phase 6) --------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("seeded")
+def test_findings_are_scored_and_listed_highest_risk_first(
+    db_client: TestClient, run_scan: RunScan, viewer: User
+) -> None:
+    scan = run_scan()
+    assert scan.risk_summary == {
+        "model_version": 1,
+        "max_score": 85,
+        "by_priority": {"P1": 4, "P2": 1, "P3": 0, "P4": 2},
+    }
+    listed = [(f["rule_id"], f["risk_score"]) for f in _get(db_client, viewer)]
+    assert [score for _, score in listed] == [85, 85, 85, 80, 75, 35, 35]
+    assert listed[3:5] == [("CS-IAM-002", 80), ("CS-IAM-002", 75)]  # user with a password, role
+
+    assert [f["risk_score"] for f in _get(db_client, viewer, min_risk=80)] == [85, 85, 85, 80]
+    ascending = _get(db_client, viewer, sort="risk", order="asc")
+    assert ascending[0]["risk_score"] == 35
+    response = db_client.get("/api/findings", headers=bearer(viewer), params={"min_risk": 101})
+    assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("seeded")
+def test_finding_detail_explains_the_score(
+    db_client: TestClient, run_scan: RunScan, viewer: User
+) -> None:
+    run_scan()
+    summary = _get(db_client, viewer, rule_id="CS-SG-001")[0]
+    detail = db_client.get(f"/api/findings/{summary['id']}", headers=bearer(viewer)).json()
+    breakdown = detail["risk_breakdown"]
+    assert detail["risk_score"] == breakdown["score"] == 85
+    assert breakdown["priority"] == "P1"
+    assert breakdown["severity"] == {"level": "HIGH", "points": 40}
+    assert breakdown["exposure"]["level"] == "INTERNET"
+    assert "public IP" in breakdown["exposure"]["reason"]
+    assert breakdown["impact"]["points"] == 20
+    assert breakdown["confidence"]["points"] == 0
+
+
+@pytest.mark.usefixtures("seeded")
+def test_risk_follows_the_current_exposure(
+    db_session: Session, run_scan: RunScan, seeded: Seeded
+) -> None:
+    run_scan()
+    finding = _findings(db_session)[("CS-SG-001", seeded.open_group_id)]
+    assert finding.risk_score == 85
+
+    boto3.client("ec2", region_name="us-east-1").stop_instances(InstanceIds=[seeded.instance_id])
+    run_scan()
+    finding = _findings(db_session)[("CS-SG-001", seeded.open_group_id)]
+    # Still open to the internet, but no running instance with a public IP uses the group.
+    assert finding.risk_breakdown is not None
+    assert finding.risk_breakdown["exposure"]["level"] == "INDIRECT"
+    assert finding.risk_score == 70
+
+
+@pytest.mark.usefixtures("seeded")
+def test_false_positives_are_left_out_of_the_scan_risk_summary(
+    db_client: TestClient, db_session: Session, run_scan: RunScan, analyst: User
+) -> None:
+    run_scan()
+    role_finding = _findings(db_session)[("CS-IAM-002", OPS_ADMIN)]
+    response = _patch(
+        db_client, analyst, role_finding.id, status="FALSE_POSITIVE", note="Break-glass role"
+    )
+    assert response.status_code == 200
+
+    scan = run_scan()
+    assert scan.risk_summary["by_priority"] == {"P1": 4, "P2": 0, "P3": 0, "P4": 2}
+    assert scan.finding_count == 7  # still detected and counted, just not in the risk summary

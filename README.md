@@ -2,10 +2,10 @@
 
 An AWS cloud security monitoring and misconfiguration detection platform (portfolio project).
 
-> **Status: Phase 5 of 10 (security rule engine).** CloudSentinel can register an AWS account,
-> run a read-only scan, store the discovered resources and turn misconfigurations into findings
-> with evidence and remediation. There is **no risk score or dashboard yet** (findings are
-> available through the API only). This README will be rewritten in Phase 10 and will only
+> **Status: Phase 6 of 10 (risk engine).** CloudSentinel can register an AWS account, run a
+> read-only scan, store the discovered resources, turn misconfigurations into findings with
+> evidence and remediation, and give each finding an explainable 0-100 risk score. There is
+> **no dashboard yet** (findings are available through the API only). This README will be rewritten in Phase 10 and will only
 > describe what is actually implemented.
 
 ## What exists today
@@ -33,6 +33,9 @@ An AWS cloud security monitoring and misconfiguration detection platform (portfo
   in `security-rules/README.md`. Findings are de-duplicated across scans, closed automatically
   only when a scan proves the problem is gone, and can be triaged by analysts
   (`GET/PATCH /api/findings`, `GET /api/rules`)
+- Risk engine: a deterministic 0-100 score per finding from severity, exposure, impact and
+  confidence, with a stored point-by-point explanation and P1-P4 priorities
+  (`docs/risk-model.md`)
 
 ## Run with Docker
 
@@ -107,10 +110,11 @@ backend/         FastAPI app (app/), Alembic migrations (alembic/), tests (tests
   app/scans/     scan orchestration and persistence
   app/rules/     rule engine and checks (pure Python, no AWS or database code)
   app/findings/  fingerprints, finding sync after each scan, triage
+  app/risk/      risk scoring (pure Python)
   app/domain/    typed resource models shared by everything else
 frontend/        React + TypeScript + Vite + Tailwind (src/), tests (tests/)
 security-rules/  rule metadata (one YAML file per rule) and the rule list
-docs/            architecture, security model, AWS permissions
+docs/            architecture, security model, risk model, AWS permissions
 infrastructure/  least-privilege IAM policy
 docker-compose.yml, docker-compose.aws.yml (optional AWS access), .env.example
 ```

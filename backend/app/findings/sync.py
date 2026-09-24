@@ -22,11 +22,18 @@ from app.domain.resources import ResourceKey, ResourceType, resource_key
 from app.findings.fingerprint import fingerprint
 from app.models.finding import ACTIVE_FINDING_STATUSES, Finding, FindingStatus
 from app.models.resource import Resource
+from app.risk.scoring import assess
 from app.rules.engine import Detection, Evaluation
 
 # Services whose resources live in one region; for the others (S3 listing, IAM) every
 # resource is in scope no matter which regions the account registered.
 REGIONAL_SERVICES = {"ec2", "cloudtrail"}
+
+
+@dataclass(frozen=True)
+class SyncResult:
+    finding_counts: dict[str, int]  # this scan's detections per severity
+    risk_scores: list[int]  # this scan's detections, without analyst-marked false positives
 
 
 @dataclass(frozen=True)
@@ -80,6 +87,11 @@ def _record_detection(
     finding.category = str(metadata.category)
     finding.severity = str(detection.severity)
     finding.evidence = detection.evidence
+    risk = assess(
+        metadata.id, str(detection.resource.resource_type), detection.severity, detection.evidence
+    )
+    finding.risk_score = risk.score
+    finding.risk_breakdown = risk.breakdown
     finding.resource_type = str(detection.resource.resource_type)
     finding.resource_id = detection.resource.resource_id
     finding.region = detection.resource.region
@@ -93,8 +105,8 @@ def sync_findings(
     scope: ScanScope,
     evaluation: Evaluation,
     rows: dict[ResourceKey, Resource],
-) -> dict[str, int]:
-    """Creates, updates and closes findings. Returns the scan's detections per severity."""
+) -> SyncResult:
+    """Creates, updates and closes findings, and summarizes this scan's detections."""
     existing = {
         finding.fingerprint: finding
         for finding in db.scalars(
@@ -103,6 +115,7 @@ def sync_findings(
     }
 
     detected: set[str] = set()
+    risk_scores: list[int] = []
     for detection in evaluation.detections:
         key = resource_key(detection.resource)
         fp = fingerprint(scope.aws_account_id, detection.rule.id, key)
@@ -111,6 +124,8 @@ def sync_findings(
             db.add(finding)
             existing[fp] = finding
         detected.add(fp)
+        if finding.status != FindingStatus.FALSE_POSITIVE and finding.risk_score is not None:
+            risk_scores.append(finding.risk_score)
 
     for fp, finding in existing.items():
         if fp in detected or finding.status not in ACTIVE_FINDING_STATUSES:
@@ -130,4 +145,5 @@ def sync_findings(
                 scope.now,
             )
 
-    return dict(Counter(str(d.severity) for d in evaluation.detections))
+    counts = dict(Counter(str(d.severity) for d in evaluation.detections))
+    return SyncResult(finding_counts=counts, risk_scores=risk_scores)

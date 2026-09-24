@@ -30,6 +30,15 @@ def _statement(statement: BroadStatement) -> dict[str, Any]:
     }
 
 
+def user_credentials(config: IamUserConfig) -> dict[str, Any]:
+    """Whether anyone can sign in as this user (None: credential report unavailable)."""
+    keys = [config.access_key_1_active, config.access_key_2_active]
+    return {
+        "console_password": config.password_enabled,
+        "active_access_keys": None if None in keys else sum(1 for key in keys if key),
+    }
+
+
 def is_privileged(config: IamUserConfig | IamRoleConfig) -> bool:
     return config.uses_admin_managed_policy or bool(config.broad_statements)
 
@@ -75,10 +84,12 @@ def overly_broad_permissions(resource: NormalizedResource, context: RuleContext)
         for statement in config.broad_statements
     )
     statements = config.broad_statements
-    evidence = {
+    evidence: dict[str, Any] = {
         "administrator_access_policy": config.uses_admin_managed_policy,
         "full_admin": full_admin,
         "broad_statement_count": len(statements),
         "broad_statements": [_statement(s) for s in statements[:MAX_STATEMENTS_IN_EVIDENCE]],
     }
+    if isinstance(config, IamUserConfig):
+        evidence.update(user_credentials(config))
     return Outcome.failed(evidence, severity=Severity.HIGH if full_admin else Severity.MEDIUM)

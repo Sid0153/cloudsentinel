@@ -37,13 +37,14 @@ def list_all_findings(
     rule_id: Annotated[str | None, Query(max_length=32)] = None,
     region: Annotated[str | None, Query(max_length=32)] = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
-    sort: SortField = "severity",
+    min_risk: Annotated[int | None, Query(ge=0, le=100)] = None,
+    sort: SortField = "risk",
     order: SortOrder = "desc",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[Finding]:
-    """Findings, newest problems first within each severity. Repeat status / severity /
-    category to match any of several values, e.g. ?severity=HIGH&severity=CRITICAL."""
+    """Findings, highest risk first by default. Repeat status / severity / category to match
+    any of several values, e.g. ?severity=HIGH&severity=CRITICAL."""
     filters = FindingFilters(
         aws_account_id=aws_account_id,
         statuses=finding_status,
@@ -53,6 +54,7 @@ def list_all_findings(
         rule_id=rule_id,
         region=region,
         search=q.strip() if q else None,
+        min_risk=min_risk,
     )
     return list_findings(db, filters, sort, order, limit, offset)
 

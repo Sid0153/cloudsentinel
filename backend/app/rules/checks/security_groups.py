@@ -9,6 +9,7 @@ decide pass or fail: an unattached open group is one attachment away from being 
 from typing import Any
 
 from app.domain.resources import (
+    Ec2InstanceConfig,
     IpPermission,
     NormalizedResource,
     ResourceType,
@@ -89,9 +90,32 @@ def describe(
     }
 
 
-def attachment_evidence(group: SecurityGroupConfig) -> dict[str, Any]:
+def internet_facing_instances(
+    resource: NormalizedResource, group: SecurityGroupConfig, context: RuleContext
+) -> list[str]:
+    """Attached instances that are running and have a public IP address (the risk engine uses
+    this to tell "open and reachable now" from "open but not reachable")."""
+    attached = set(group.attached_instance_ids)
+    found: list[str] = []
+    for instance in context.of_type(ResourceType.EC2_INSTANCE):
+        config = instance.config
+        if (
+            instance.region == resource.region
+            and instance.resource_id in attached
+            and isinstance(config, Ec2InstanceConfig)
+            and config.state == "running"
+            and config.public_ip
+        ):
+            found.append(instance.resource_id)
+    return sorted(found)
+
+
+def attachment_evidence(
+    resource: NormalizedResource, group: SecurityGroupConfig, context: RuleContext
+) -> dict[str, Any]:
     return {
         "attached_instance_ids": group.attached_instance_ids,
+        "internet_facing_instance_ids": internet_facing_instances(resource, group, context),
         "attachments_known": group.attachments_known,
     }
 
@@ -109,22 +133,23 @@ def rules_opening_tcp_port(group: SecurityGroupConfig, port: int) -> list[dict[s
     return found
 
 
-def _open_port_check(resource: NormalizedResource, port: int) -> Outcome:
+def _open_port_check(resource: NormalizedResource, context: RuleContext, port: int) -> Outcome:
     group = config_of(resource, SecurityGroupConfig)
     open_rules = rules_opening_tcp_port(group, port)
     if not open_rules:
         return Outcome.passed()
-    return Outcome.failed({"port": port, "open_rules": open_rules, **attachment_evidence(group)})
+    evidence = {"port": port, "open_rules": open_rules}
+    return Outcome.failed({**evidence, **attachment_evidence(resource, group, context)})
 
 
 @check("CS-SG-001", ResourceType.SECURITY_GROUP)
 def unrestricted_ssh(resource: NormalizedResource, context: RuleContext) -> Outcome:
-    return _open_port_check(resource, SSH_PORT)
+    return _open_port_check(resource, context, SSH_PORT)
 
 
 @check("CS-SG-002", ResourceType.SECURITY_GROUP)
 def unrestricted_rdp(resource: NormalizedResource, context: RuleContext) -> Outcome:
-    return _open_port_check(resource, RDP_PORT)
+    return _open_port_check(resource, context, RDP_PORT)
 
 
 def _is_covered_elsewhere(ports: tuple[int, int]) -> bool:
@@ -168,5 +193,5 @@ def broad_inbound_access(resource: NormalizedResource, context: RuleContext) -> 
         )
     if not exposures:
         return Outcome.passed()
-    evidence = {"exposures": exposures, **attachment_evidence(group)}
+    evidence = {"exposures": exposures, **attachment_evidence(resource, group, context)}
     return Outcome.failed(evidence, severity=worst(severities))

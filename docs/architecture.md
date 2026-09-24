@@ -19,8 +19,8 @@ api  →  services / scans  →  aws / rules / risk / audit  →  domain
 
 - `aws/` is the only package that imports boto3.
 - `domain/` holds plain dataclasses with no boto3, database or HTTP code.
-- `rules/` is pure Python as well (it reads its YAML metadata files, nothing else); `risk/`
-  (Phase 6) will be too.
+- `rules/` is pure Python as well (it reads its YAML metadata files, nothing else), and so is
+  `risk/`: a score depends only on the rule, resource type, severity and evidence.
 
 ## Scan pipeline (Phase 4)
 
@@ -39,7 +39,9 @@ POST /api/scans (ANALYST+)
        5. upsert_resources(): one row per resource, updated in place (first_seen / last_seen)
        6. evaluate(): every rule on every resource of its type → PASS / FAIL / UNKNOWN,
           plus a per-rule summary stored as scan.rule_results
-       7. sync_findings(): create, update, reopen or close findings (see below)
+       7. sync_findings(): create, update, reopen or close findings (see below); every
+          detected finding is (re-)scored by the risk engine (docs/risk-model.md), and the
+          scan stores a risk_summary
        8. COMPLETED, or COMPLETED_WITH_ERRORS when any service was not fully read or a rule
           crashed
 GET /api/scans/{id} — poll for status, counts and coverage
@@ -63,6 +65,9 @@ GET /api/scans/{id} — poll for status, counts and coverage
 | `app/findings/fingerprint.py` | Stable SHA-256 identity of "rule X failing on resource Y" |
 | `app/findings/sync.py` | Applies one scan's results to the findings table |
 | `app/findings/service.py` | Finding list filters and analyst status changes |
+| `app/risk/model.py` | Risk factor levels, their points, priority bands |
+| `app/risk/profiles.py` | Per-rule exposure / impact / confidence from the evidence |
+| `app/risk/scoring.py` | `assess()` (score + breakdown) and the scan summary |
 
 ### Supported resources
 
@@ -130,8 +135,8 @@ Automatic changes have `status_updated_by_id = NULL` and a short note; analyst c
 - Rule metadata is read once at startup; changing a YAML file needs a restart.
 - Findings keep the title and severity of the latest detection. If a rule's text changes, open
   findings pick it up at the next scan; closed ones keep the old text.
-- There is no risk score yet (Phase 6), no audit log table yet (Phase 8; status changes go to the
-  application log), and no UI for findings yet (Phase 7).
+- No audit log table yet (Phase 8; status changes go to the application log), and no UI for
+  findings yet (Phase 7). Risk scoring limitations are in `docs/risk-model.md`.
 - The list endpoint returns a page (`limit`/`offset`) without a total count.
 
 ## Decisions
@@ -155,3 +160,7 @@ Automatic changes have `status_updated_by_id = NULL` and a short note; analyst c
 | Account-wide rules run on the `AWS::Account` resource | "Is there any trail?" cannot be asked of a single trail |
 | UNKNOWN never closes a finding | A denied API call must not make a problem disappear |
 | Fingerprint from the 12-digit AWS account ID | Stable if the account is removed and registered again |
+| Risk is a pure function of (rule, resource type, severity, evidence) | Deterministic and re-computable; the evidence documents the score |
+| Additive points, not multiplication | Every point can be explained in one line; easy to test and to argue about |
+| P1-P4 priorities instead of reusing LOW..CRITICAL | A HIGH-severity finding can be a P2; separate words avoid confusion |
+| Risk data computed at scan time and stored | Sorting and filtering in SQL; the breakdown shows exactly what was used |

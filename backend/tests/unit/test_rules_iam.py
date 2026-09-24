@@ -118,3 +118,29 @@ def test_user_whose_policies_could_not_be_read_is_unknown() -> None:
 def test_service_linked_roles_are_skipped() -> None:
     role = iam_role(path="/aws-service-role/", uses_admin_managed_policy=True)
     assert _broad(role).status == OutcomeStatus.PASS
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"access_key_1_active": True}, {"console_password": True, "active_access_keys": 1}),
+        (
+            {"password_enabled": False, "access_key_1_active": True, "access_key_2_active": True},
+            {"console_password": False, "active_access_keys": 2},
+        ),
+        (
+            {"password_enabled": None, "access_key_1_active": None, "access_key_2_active": None},
+            {"console_password": None, "active_access_keys": None},
+        ),
+    ],
+)
+def test_broad_user_evidence_says_whether_anyone_can_sign_in(
+    config: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    outcome = _broad(iam_user(uses_admin_managed_policy=True, **config))
+    assert {key: outcome.evidence[key] for key in expected} == expected
+
+
+def test_role_evidence_has_no_user_credential_fields() -> None:
+    outcome = _broad(iam_role(uses_admin_managed_policy=True))
+    assert "console_password" not in outcome.evidence

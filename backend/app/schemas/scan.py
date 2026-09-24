@@ -28,4 +28,5 @@ class ScanPublic(BaseModel):
     error_summary: str | None
     finding_count: int
     finding_counts: dict[str, int]  # findings detected by this scan, by severity
+    risk_summary: dict[str, Any]  # max_score and counts per priority band (P1-P4)
     rule_results: dict[str, Any]  # per rule: status (PASSED, FAILED, INCOMPLETE...) and counts
