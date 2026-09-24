@@ -7,7 +7,7 @@ export type LoadState<T> =
   | { kind: "loaded"; data: T }
   | { kind: "error"; message: string };
 
-export function describeError(error: unknown): string {
+function describeError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 403) return "Your role does not have access to this.";
     if (error.status === 404) return "Not found. It may have been removed.";

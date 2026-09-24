@@ -14,3 +14,8 @@ export function listUsers(): Promise<User[]> {
 export function createUser(input: NewUser): Promise<User> {
   return apiRequest<User>("/users", { method: "POST", body: input });
 }
+
+/** Change a user's role and/or active flag. Admins cannot change their own (the API refuses). */
+export function updateUser(id: string, changes: { role?: Role; is_active?: boolean }): Promise<User> {
+  return apiRequest<User>(`/users/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
+}

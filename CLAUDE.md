@@ -18,7 +18,10 @@ something works without verifying it, and end each phase with the interview-lear
 | 7 Dashboard | Done, green in CI (387 backend, 53 frontend tests). Visually checked desktop + phone |
 | 8 Audit logging | Done, green in CI (410 backend, 58 frontend tests). Append-only via DB triggers |
 | 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
-| 10 Portfolio preparation | NEXT. Wait for the user to say "Proceed to Phase 10" |
+| 10 Portfolio preparation | Done locally (review fixes, final docs); not yet pushed to CI |
+
+All ten phases are complete once Phase 10 is green in CI. Later work is ordinary maintenance:
+keep the checks below green and the docs tests passing.
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
 (Phase 5): checks in `backend/app/rules/checks/`, listed in `registry.py`, metadata in
@@ -48,7 +51,9 @@ Frontend (from `frontend/`): `npm run lint`, `npm run typecheck`, `npm test`, `n
 CI (`.github/workflows/ci.yml`) runs the same plus gitleaks and a Docker Compose smoke test
 (including hardening checks); confirm it is green after pushing.
 After changing an API route or schema: `python -m app.cli export-openapi` (from `backend/`) and
-update the table in `docs/api.md`; tests fail if either is stale.
+update the table in `docs/api.md`. After changing a model: update `docs/database-schema.md`.
+After adding an AWS call: update `infrastructure/cloudsentinel-readonly-policy.json` and the
+mapping in `tests/unit/test_iam_policy.py`. Tests fail if any of these is stale.
 
 ## Conventions
 
@@ -72,3 +77,6 @@ update the table in `docs/api.md`; tests fail if either is stale.
   Frontend: `npm ci`; `package-lock.json` is committed. Never silence an audit finding without
   saying why; upgrade instead.
 - In Git Bash, `docker run -v` paths need `MSYS_NO_PATHCONV=1`.
+- `portfolio/` (interview prep) and `CLOUDSENTINEL_MASTER_PROMPT.md` are personal and git-ignored.
+- Example output in the README comes from the moto test environment and is labelled as such;
+  never present it as a real AWS account.

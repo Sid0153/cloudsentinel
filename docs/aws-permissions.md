@@ -29,6 +29,10 @@ The policy is in [`infrastructure/cloudsentinel-readonly-policy.json`](../infras
 Sources: the S3 API reference pages for each operation, the S3 Block Public Access
 permissions table, and the IAM credential report guide.
 
+`backend/tests/unit/test_iam_policy.py` keeps this honest: it reads the collectors' code,
+maps every AWS call to its IAM action, and fails if the policy grants anything unused or misses
+anything called.
+
 ### Why not the AWS-managed `SecurityAudit` or `ReadOnlyAccess` policies?
 
 They work, but grant read access to hundreds of other APIs. `ReadOnlyAccess` can even read
@@ -89,9 +93,10 @@ docker compose -f docker-compose.yml -f docker-compose.aws.yml up --build
 The folder is mounted read-only. For an SSO profile, run `aws sso login --profile ...` on
 your machine first; the container can read the cached token but cannot refresh it.
 
-Then, as an ADMIN, register the account (`POST /api/aws-accounts`), check it
-(`POST /api/aws-accounts/{id}/verify` should return `"matches": true`), and start a scan as an
-ANALYST or ADMIN (`POST /api/scans`).
+Then, as an ADMIN, open **Settings → AWS accounts**, register the account and click
+**Verify access** (it must report the same account ID). Start a scan from **Scans** as an
+ANALYST or ADMIN. The same actions exist in the API: `POST /api/aws-accounts`,
+`POST /api/aws-accounts/{id}/verify`, `POST /api/scans`.
 
 ## Cost and safety
 

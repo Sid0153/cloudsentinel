@@ -3,7 +3,8 @@
 -r requirements.in
 pytest>=9.0.3,<10.0
 pytest-cov>=5.0
-httpx>=0.27,<1.0
+# The HTTP client behind FastAPI's TestClient (httpx2 is the maintained successor Starlette uses).
+httpx2>=2.13,<3.0
 ruff>=0.6
 mypy>=1.11
 types-PyYAML>=6.0

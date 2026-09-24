@@ -23,7 +23,7 @@ import {
   type Severity,
 } from "../types/api";
 
-export const PAGE_SIZE = 25;
+const PAGE_SIZE = 25;
 // Without an explicit status filter the page shows what still needs attention.
 const DEFAULT_STATUSES: FindingStatus[] = ["OPEN", "ACKNOWLEDGED"];
 const SORTS: { value: FindingSort; label: string }[] = [

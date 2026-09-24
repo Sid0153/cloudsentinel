@@ -22,7 +22,7 @@ const PRIORITY_STYLES: Record<Priority, string> = {
   P4: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-300",
 };
 
-export function priorityFor(score: number): Priority {
+function priorityFor(score: number): Priority {
   if (score >= 80) return "P1";
   if (score >= 60) return "P2";
   if (score >= 40) return "P3";

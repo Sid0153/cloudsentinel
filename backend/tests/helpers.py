@@ -2,7 +2,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-import httpx
+import httpx2
 from sqlalchemy.orm import Session
 
 from app.auth.passwords import hash_password
@@ -51,11 +51,11 @@ def bearer(user: User) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token_for(user)}"}
 
 
-def login(client: httpx.Client, email: str, password: str) -> httpx.Response:
+def login(client: httpx2.Client, email: str, password: str) -> httpx2.Response:
     return client.post("/api/auth/login", json={"email": email, "password": password})
 
 
-def refresh_cookie_value(response: httpx.Response) -> str:
+def refresh_cookie_value(response: httpx2.Response) -> str:
     value = response.cookies.get("cs_refresh")
     assert value, "response did not set the refresh cookie"
     return value

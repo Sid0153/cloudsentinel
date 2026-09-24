@@ -1,7 +1,7 @@
 """Plain, typed descriptions of AWS resources after normalization.
 
 Nothing here knows about boto3, HTTP or the database. Collectors fetch raw AWS data,
-normalizers turn it into these objects, and (from Phase 5) rules read them.
+normalizers turn it into these objects, and the rule engine reads them.
 A value that could not be determined is None, never a guess.
 """
 

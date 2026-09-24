@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 
+import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../services/api";
-import { createUser, listUsers } from "../services/users";
+import { createUser, listUsers, updateUser } from "../services/users";
 import type { Role, User } from "../types/auth";
 
 const ROLES: Role[] = ["VIEWER", "ANALYST", "ADMIN"];
@@ -103,7 +104,73 @@ function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+/** Role and active flag for one user. Your own row is read-only (the API refuses it too). */
+function UserRow({ user, isSelf, onChanged }: { user: User; isSelf: boolean; onChanged: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function change(changes: { role?: Role; is_active?: boolean }) {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateUser(user.id, changes);
+      onChanged();
+    } catch {
+      setError("Could not update this user.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td className="px-4 py-2">
+        {user.email}
+        {isSelf && <span className="ml-2 text-xs text-slate-500">(you)</span>}
+        {error && (
+          <p role="alert" className="text-xs text-red-700">
+            {error}
+          </p>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        <label className="sr-only" htmlFor={`role-${user.id}`}>
+          Role of {user.email}
+        </label>
+        <select
+          id={`role-${user.id}`}
+          value={user.role}
+          disabled={isSelf || busy}
+          onChange={(event) => void change({ role: event.target.value as Role })}
+          className="rounded border border-slate-300 px-2 py-1 text-sm disabled:bg-slate-50"
+        >
+          {ROLES.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-4 py-2">
+        {user.is_active ? "Yes" : "No"}
+        {!isSelf && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void change({ is_active: !user.is_active })}
+            className="ml-3 rounded border border-slate-300 px-2 py-0.5 text-xs disabled:opacity-60"
+          >
+            {user.is_active ? "Deactivate" : "Activate"}
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 export default function UsersPage() {
+  const { state: auth } = useAuth();
+  const selfId = auth.status === "authenticated" ? auth.user.id : null;
   const [users, setUsers] = useState<User[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -127,7 +194,9 @@ export default function UsersPage() {
   return (
     <section>
       <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-      <p className="mt-1 text-sm text-slate-600">Accounts that can sign in to CloudSentinel.</p>
+      <p className="mt-1 text-sm text-slate-600">
+        Accounts that can sign in to CloudSentinel. Deactivating a user ends their sessions at once.
+      </p>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         {loadFailed && (
@@ -151,11 +220,12 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {users.map((user) => (
-                <tr key={user.id}>
-                  <td className="px-4 py-2">{user.email}</td>
-                  <td className="px-4 py-2">{user.role}</td>
-                  <td className="px-4 py-2">{user.is_active ? "Yes" : "No"}</td>
-                </tr>
+                <UserRow
+                  key={user.id}
+                  user={user}
+                  isSelf={user.id === selfId}
+                  onChanged={() => setReloadKey((key) => key + 1)}
+                />
               ))}
             </tbody>
           </table>

@@ -31,7 +31,7 @@ export function Card({ title, children, className = "" }: {
   );
 }
 
-export function Loading({ what }: { what: string }) {
+function Loading({ what }: { what: string }) {
   return (
     <p role="status" className="py-4 text-sm text-slate-600">
       Loading {what}…
@@ -39,7 +39,7 @@ export function Loading({ what }: { what: string }) {
   );
 }
 
-export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function ErrorMessage({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div role="alert" className="flex items-center gap-3 py-4 text-sm text-red-700">
       <span>{message}</span>

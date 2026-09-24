@@ -54,7 +54,7 @@ class FindingSummary(BaseModel):
     title: str
     category: Category
     severity: Severity
-    risk_score: int | None  # 0-100; None until a scan scores it (findings older than Phase 6)
+    risk_score: int | None  # 0-100; None only for findings created before risk scoring existed
     status: FindingStatus
     resource_type: str
     resource_id: str
