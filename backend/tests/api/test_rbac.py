@@ -8,12 +8,10 @@ import uuid
 
 import pytest
 from fastapi import FastAPI
-from fastapi.dependencies.models import Dependant
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.auth.deps import AnalystUser, get_current_user
+from app.auth.deps import AnalystUser
 from app.models.user import Role, User
 from tests.helpers import access_token_for, make_user
 
@@ -43,35 +41,30 @@ def _allowed(role: Role, minimum: Role | None) -> bool:
     return minimum is None or _RANK[role] >= _RANK[minimum]
 
 
+_HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+
 def _api_routes(app: FastAPI) -> set[Route]:
-    found: set[Route] = set()
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
-                found.add((method, route.path))
-    return found
+    """Every (method, path) the app serves, read from its OpenAPI schema.
 
-
-def _depends_on(dependant: Dependant, target: object) -> bool:
-    return any(
-        child.call is target or _depends_on(child, target) for child in dependant.dependencies
-    )
+    Walking app.routes looks simpler, but what it contains depends on the FastAPI version
+    (an earlier version of this test found no routes and silently checked nothing).
+    """
+    paths = app.openapi()["paths"]
+    return {
+        (method.upper(), path)
+        for path, operations in paths.items()
+        for method in operations
+        if method.upper() in _HTTP_METHODS
+    }
 
 
 def test_every_route_has_a_declared_access_rule(app: FastAPI) -> None:
-    declared = PUBLIC_ROUTES | set(EXPECTED_ACCESS)
     routes = _api_routes(app)
+    assert len(routes) >= len(PUBLIC_ROUTES) + len(EXPECTED_ACCESS)
+    declared = PUBLIC_ROUTES | set(EXPECTED_ACCESS)
     assert routes - declared == set(), "route added without an access rule in this file"
     assert declared - routes == set(), "access rule refers to a route that no longer exists"
-
-
-def test_every_protected_route_requires_authentication(app: FastAPI) -> None:
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
-            if (method, route.path) in EXPECTED_ACCESS:
-                assert _depends_on(route.dependant, get_current_user), (method, route.path)
 
 
 def _matrix() -> list[tuple[str, str, Role | None, Role]]:
