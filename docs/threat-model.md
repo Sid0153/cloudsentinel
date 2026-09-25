@@ -26,7 +26,9 @@ Operator shell ──(5)── containers (.env, CLI)
 ```
 
 1. Internet/user to the app: untrusted input, stolen sessions, brute force.
-2. nginx to backend: `X-Forwarded-For` is trusted from nginx only (backend port bound to localhost).
+2. nginx to backend: only the `X-Forwarded-For` entry nginx appends is trusted
+   (`TRUSTED_PROXY_HOPS=1`); anything to its left came from the client. On Render the client
+   address comes from `True-Client-IP`, which the platform sets (`CLIENT_IP_HEADER`).
 3. Backend to database: the application's database user can read and write everything except
    change or delete audit records.
 4. Backend to AWS: responses are data; errors can contain ARNs.
@@ -56,6 +58,7 @@ Operator shell ──(5)── containers (.env, CLI)
 | Information disclosure | Committed credentials | No AWS keys anywhere (standard credential chain), `.env` ignored, gitleaks over full history in CI | `.gitleaks.toml`, CI |
 | Information disclosure | Over-privileged AWS identity | Custom 14-action read-only policy; a test proves it matches the code exactly | `infrastructure/`, `test_iam_policy.py` |
 | **Denial of service** | Login flooding | Rate limit and lockout (per process) | `core/rate_limit.py` |
+| Spoofing | Forged `X-Forwarded-For` to dodge rate limits or fake the audit IP | Client address read from the right of the header (trusted proxy hops) or from a platform header, never from the client-controlled left part; checked through nginx in CI | `core/client_ip.py`, `test_client_ip.py`, CI |
 | Denial of service | Huge requests / pages | `limit` caps on lists, 1 MB body limit at nginx, string length limits in schemas | API, `nginx.conf` |
 | Denial of service | Many parallel scans | One active scan per AWS account (row lock), 3 scan starts per minute per IP | `scans/service.py`, `test_scans.py` |
 | Denial of service | Visitors of a public demo signing each other out | Guest refresh-token replay ends only that session; guest password cannot be changed; lockout does not block guest sign-in | `auth/service.py`, `test_guest.py` |

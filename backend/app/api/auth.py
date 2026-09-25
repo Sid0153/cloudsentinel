@@ -21,6 +21,7 @@ from app.auth.service import (
     start_session,
 )
 from app.core.config import Settings
+from app.core.middleware import client_ip
 from app.core.rate_limit import SlidingWindowRateLimiter
 from app.models.user import User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, TokenResponse
@@ -67,7 +68,7 @@ def _token_response(access_token: str, user: User, settings: Settings) -> TokenR
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    return client_ip(request)
 
 
 def _check_login_rate(request: Request, db: DbSession) -> None:

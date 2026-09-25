@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     # Sandbox mode (docs/sandbox.md): every AWS call goes to this simulated AWS (moto) with
     # fake credentials, never to real AWS. Unset means normal mode: real AWS.
     sandbox_aws_endpoint: str | None = None
+    # Where the client address comes from (rate limits, audit log); see core/client_ip.py.
+    # Either a header the hosting platform always sets (Render: True-Client-IP), or the number
+    # of trusted proxies that append to X-Forwarded-For (docker compose: 1, nginx). Neither:
+    # the direct peer address, and X-Forwarded-For is ignored.
+    client_ip_header: str | None = None
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
     # Email of the shared guest account. When set, POST /api/auth/guest signs visitors in
     # as that user without a password (for public demos). The account must not be an ADMIN.
     guest_email: str | None = None
@@ -93,10 +99,25 @@ class Settings(BaseSettings):
             raise ValueError("SANDBOX_AWS_ENDPOINT must point to the simulator, not to real AWS")
         return value.rstrip("/")
 
+    @field_validator("client_ip_header")
+    @classmethod
+    def _client_ip_header_is_a_header_name(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        if not all(c.isalnum() or c == "-" for c in value):
+            raise ValueError("CLIENT_IP_HEADER must be a header name such as True-Client-IP")
+        return value
+
     @field_validator("guest_email")
     @classmethod
     def _guest_email_is_valid(cls, value: str | None) -> str | None:
         return normalize_email(value) if value else None
+
+    @model_validator(mode="after")
+    def _one_client_ip_source(self) -> Self:
+        if self.client_ip_header and self.trusted_proxy_hops:
+            raise ValueError("Set CLIENT_IP_HEADER or TRUSTED_PROXY_HOPS, not both")
+        return self
 
     @model_validator(mode="after")
     def _production_is_locked_down(self) -> Self:

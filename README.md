@@ -17,7 +17,7 @@ implemented and tested; limitations are listed at the end.
 | Backend | FastAPI (Python 3.12), SQLAlchemy 2, Alembic, PostgreSQL 16, boto3 |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Router 7 |
 | Runs as | Docker Compose: nginx (serves the app, proxies `/api`), backend, database |
-| Tests | 506 backend (pytest, moto, real PostgreSQL; 96% coverage), 75 frontend (Vitest, Testing Library) |
+| Tests | 519 backend (pytest, moto, real PostgreSQL; 96% coverage), 75 frontend (Vitest, Testing Library) |
 | CI | GitHub Actions: lint, types, tests, dependency audits, secret scan, Docker smoke test |
 
 ## 2. Problem statement
@@ -170,6 +170,7 @@ fails if the policy grants anything the code does not call, or misses anything i
 | `SANDBOX_AWS_ENDPOINT` | no | Sandbox mode: scan the simulator at this URL (set by `docker-compose.sandbox.yml`; AWS hosts are refused) |
 | `GUEST_EMAIL` | no | Enables *Explore as guest* as this non-admin account |
 | `SCAN_RATE_LIMIT_PER_MINUTE`, `SANDBOX_RATE_LIMIT_PER_MINUTE` | no | Per-IP limits (3 and 30 by default) |
+| `TRUSTED_PROXY_HOPS` or `CLIENT_IP_HEADER` | behind a proxy | Where the client IP comes from: proxies appending to `X-Forwarded-For` (compose: 1) or a platform header (Render: `True-Client-IP`) |
 
 `python -m app.cli check-config` validates all of it (the container runs it at start-up) and
 names bad settings without printing their values.
@@ -192,7 +193,7 @@ Backend (from `backend/`), against a scratch PostgreSQL database:
 
 ```bash
 export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/cloudsentinel_test
-pytest --cov=app          # 506 tests; AWS is mocked with moto, credentials are fake
+pytest --cov=app          # 519 tests; AWS is mocked with moto, credentials are fake
 ruff check . && mypy
 pip-audit -r requirements.txt --require-hashes --disable-pip
 ```

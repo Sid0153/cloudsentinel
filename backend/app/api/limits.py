@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.audit.events import AuditAction, AuditOutcome
 from app.audit.service import record
+from app.core.middleware import client_ip
 from app.core.rate_limit import SlidingWindowRateLimiter
 from app.models.user import User
 
@@ -20,7 +21,7 @@ def enforce_rate_limit(
 
     Keyed by IP, not by user: on a public demo many visitors share one guest account.
     """
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     if limiter.allow(ip):
         return
     logger.warning("Rate limit for %s hit from %s", kind, ip)

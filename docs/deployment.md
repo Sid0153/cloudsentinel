@@ -20,6 +20,10 @@ simulator accepts any credentials, so it must not get a public address. `deploy/
 therefore runs it inside the backend container on `127.0.0.1:5000`, restarted automatically
 if it stops (`deploy/start.sh`). CI checks that only the app's port listens on all interfaces.
 
+**Client addresses.** Render appends to whatever `X-Forwarded-For` a client sends, so the
+backend reads the visitor's address from `True-Client-IP` instead (`CLIENT_IP_HEADER`), which
+Render's Cloudflare edge sets. This matters for the per-IP rate limits and the audit log.
+
 **Same origin.** The static site rewrites `/api/*` to the backend, so the browser talks to one
 address: the refresh cookie (`SameSite=Strict`, `Secure`) and the CSP work as in Docker
 Compose.

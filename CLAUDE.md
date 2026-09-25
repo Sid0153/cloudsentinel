@@ -20,7 +20,7 @@ something works without verifying it, and end each phase with the interview-lear
 | 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
 | 10 Portfolio preparation | Done, green in CI (425 backend, 61 frontend tests, 96% coverage) |
 | 11 Sandbox mode and guest access | Done, green in CI (506 backend, 75 frontend tests, 96% coverage; sandbox end-to-end check in CI) |
-| 12 Free public deployment | Prepared (render.yaml, deploy/Dockerfile, docs/deployment.md; 507 backend tests). Live URL NOT verified yet: waiting for the user to create Neon + Render accounts |
+| 12 Free public deployment | Prepared (render.yaml, deploy/Dockerfile, docs/deployment.md; 519 backend tests). Deployed at https://cloudsentinel-demo.onrender.com; live checks passed; client-IP fix pending live verification |
 
 Phases 11-12 (user's goal): a public link where anyone can use the real, working app for free,
 without an AWS account and without offering it to customers. Phase 11 added sandbox mode (the

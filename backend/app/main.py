@@ -84,7 +84,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PATCH"],  # the API has no PUT or DELETE routes
         allow_headers=["Authorization", "Content-Type"],
     )
-    app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(
+        RequestContextMiddleware,
+        client_ip_header=settings.client_ip_header,
+        proxy_hops=settings.trusted_proxy_hops,
+    )
 
     # One limiter per app instance (so tests are isolated); keyed by client IP.
     app.state.login_limiter = SlidingWindowRateLimiter(settings.login_rate_limit_per_minute)

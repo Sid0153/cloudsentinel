@@ -29,10 +29,10 @@ services:
         value: https://cloudsentinel-demo.onrender.com
       - key: GUEST_EMAIL
         value: guest@cloudsentinel.example
-      # Only Render's proxy can reach the container, so its X-Forwarded-For is trusted: the
-      # per-IP rate limits then see visitors' addresses instead of the proxy's.
-      - key: FORWARDED_ALLOW_IPS
-        value: "*"
+      # Render (behind Cloudflare) sets True-Client-IP itself. X-Forwarded-For is not used:
+      # Render appends to what the client sends, so its first entry can be forged.
+      - key: CLIENT_IP_HEADER
+        value: True-Client-IP
 
   # The React app as a static site (does not sleep). /api/* is proxied to the backend, so the
   # browser talks to one origin and the SameSite=Strict refresh cookie keeps working.

@@ -121,6 +121,15 @@ jobs:
           test "$(docker compose exec -T frontend id -u)" != "0"
           ! docker compose exec -T backend touch /app/probe
           docker compose exec -T backend grep -q "CapEff:.0000000000000000" /proc/self/status
+      - name: A forged X-Forwarded-For does not escape the login rate limit (through nginx)
+        run: |
+          for i in $(seq 1 11); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/auth/login \
+              -H 'Content-Type: application/json' -H "X-Forwarded-For: 203.0.113.$i" \
+              -d '{"email":"nobody@example.com","password":"wrong-password-123"}')"
+          done
+          echo "11th attempt: $code"
+          test "$code" = "429"
       - name: Security headers are served
         run: |
           headers="$(curl -fsSI http://localhost:8080/)"
