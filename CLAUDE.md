@@ -19,7 +19,7 @@ something works without verifying it, and end each phase with the interview-lear
 | 8 Audit logging | Done, green in CI (410 backend, 58 frontend tests). Append-only via DB triggers |
 | 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
 | 10 Portfolio preparation | Done, green in CI (425 backend, 61 frontend tests, 96% coverage) |
-| 11 Sandbox mode and guest access | Done locally (506 backend, 75 frontend tests, 96% coverage); not yet pushed to CI |
+| 11 Sandbox mode and guest access | Done, green in CI (506 backend, 75 frontend tests, 96% coverage; sandbox end-to-end check in CI) |
 | 12 Free public deployment | NEXT. Wait for the user to say "Proceed to Phase 12" |
 
 Phases 11-12 (user's goal): a public link where anyone can use the real, working app for free,
