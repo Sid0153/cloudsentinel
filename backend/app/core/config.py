@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.client_ip import Network, parse_trusted_proxies
 from app.schemas.validators import normalize_email
 
 MIN_SECRET_KEY_LENGTH = 32
@@ -53,11 +54,12 @@ class Settings(BaseSettings):
     # fake credentials, never to real AWS. Unset means normal mode: real AWS.
     sandbox_aws_endpoint: str | None = None
     # Where the client address comes from (rate limits, audit log); see core/client_ip.py.
-    # Either a header the hosting platform always sets (Render: True-Client-IP), or the number
-    # of trusted proxies that append to X-Forwarded-For (docker compose: 1, nginx). Neither:
-    # the direct peer address, and X-Forwarded-For is ignored.
-    client_ip_header: str | None = None
+    # Either the number of proxies that append to X-Forwarded-For (docker compose: 1, nginx),
+    # or the networks proxies live in, as CIDRs and the presets "private" and "cloudflare"
+    # (Render: "private, cloudflare, 74.220.48.0/20"). Neither: the direct peer address, and
+    # X-Forwarded-For is ignored.
     trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    trusted_proxies: str | None = None
     # Diagnostics: log the forwarding headers of every request, to see what a hosting platform
     # really sends before choosing one of the two settings above. Off in normal operation.
     log_forwarding_headers: bool = False
@@ -102,13 +104,17 @@ class Settings(BaseSettings):
             raise ValueError("SANDBOX_AWS_ENDPOINT must point to the simulator, not to real AWS")
         return value.rstrip("/")
 
-    @field_validator("client_ip_header")
+    @field_validator("trusted_proxies")
     @classmethod
-    def _client_ip_header_is_a_header_name(cls, value: str | None) -> str | None:
-        if not value:
+    def _trusted_proxies_are_networks(cls, value: str | None) -> str | None:
+        if not value or not value.strip():
             return None
-        if not all(c.isalnum() or c == "-" for c in value):
-            raise ValueError("CLIENT_IP_HEADER must be a header name such as True-Client-IP")
+        try:
+            parse_trusted_proxies(value)
+        except ValueError:
+            raise ValueError(
+                "TRUSTED_PROXIES must list CIDR networks and/or 'private', 'cloudflare'"
+            ) from None
         return value
 
     @field_validator("guest_email")
@@ -118,8 +124,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _one_client_ip_source(self) -> Self:
-        if self.client_ip_header and self.trusted_proxy_hops:
-            raise ValueError("Set CLIENT_IP_HEADER or TRUSTED_PROXY_HOPS, not both")
+        if self.trusted_proxies and self.trusted_proxy_hops:
+            raise ValueError("Set TRUSTED_PROXIES or TRUSTED_PROXY_HOPS, not both")
         return self
 
     @model_validator(mode="after")
@@ -137,6 +143,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_networks(self) -> tuple[Network, ...]:
+        return parse_trusted_proxies(self.trusted_proxies) if self.trusted_proxies else ()
 
     @property
     def sandbox_enabled(self) -> bool:

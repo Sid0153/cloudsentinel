@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 
 from app.core import middleware
-from app.core.client_ip import forwarding_headers, resolve_client_ip
+from app.core.client_ip import forwarding_headers, parse_trusted_proxies, resolve_client_ip
 from app.core.config import Settings
 from app.database.session import get_db
 from app.main import create_app
@@ -20,6 +20,9 @@ from app.models.audit_log import AuditLog
 from tests.helpers import make_settings
 
 PEER = "10.0.0.5"
+VISITOR = "198.51.100.7"  # documentation address standing in for a real visitor
+FORGED = "203.0.113.99"
+RENDER = parse_trusted_proxies("private, cloudflare, 74.220.48.0/20")
 
 
 def _headers(**values: str | list[str]) -> Headers:
@@ -30,43 +33,85 @@ def _headers(**values: str | list[str]) -> Headers:
     return Headers(raw=raw)
 
 
+# --- TRUSTED_PROXY_HOPS (docker compose: nginx) -------------------------------------------
+
+
 @pytest.mark.parametrize(
     ("headers", "expected"),
     [
         ({}, PEER),
         # One trusted proxy: only the entry it appended counts; the rest is client-controlled.
-        ({"x_forwarded_for": "198.51.100.7"}, "198.51.100.7"),
-        ({"x_forwarded_for": "1.2.3.4, 198.51.100.7"}, "198.51.100.7"),
-        ({"x_forwarded_for": ["1.2.3.4", "198.51.100.7"]}, "198.51.100.7"),  # two header lines
-        ({"x_forwarded_for": "1.2.3.4, not-an-ip"}, PEER),
+        ({"x_forwarded_for": VISITOR}, VISITOR),
+        ({"x_forwarded_for": f"{FORGED}, {VISITOR}"}, VISITOR),
+        ({"x_forwarded_for": [FORGED, VISITOR]}, VISITOR),  # two header lines
+        ({"x_forwarded_for": f"{FORGED}, not-an-ip"}, PEER),
         ({"x_forwarded_for": "2001:db8::1"}, "2001:db8::1"),
     ],
 )
 def test_one_trusted_proxy_uses_the_last_entry(
     headers: dict[str, str | list[str]], expected: str
 ) -> None:
-    assert resolve_client_ip(PEER, _headers(**headers), header=None, proxy_hops=1) == expected
+    assert resolve_client_ip(PEER, _headers(**headers), proxy_hops=1) == expected
 
 
 def test_two_trusted_proxies_use_the_second_entry_from_the_right() -> None:
-    headers = _headers(x_forwarded_for="1.2.3.4, 198.51.100.7, 10.1.1.1")
-    assert resolve_client_ip(PEER, headers, header=None, proxy_hops=2) == "198.51.100.7"
-    too_short = _headers(x_forwarded_for="10.1.1.1")
-    assert resolve_client_ip(PEER, too_short, header=None, proxy_hops=2) == PEER
+    headers = _headers(x_forwarded_for=f"{FORGED}, {VISITOR}, 10.1.1.1")
+    assert resolve_client_ip(PEER, headers, proxy_hops=2) == VISITOR
+    assert resolve_client_ip(PEER, _headers(x_forwarded_for="10.1.1.1"), proxy_hops=2) == PEER
 
 
 def test_without_trusted_proxies_forwarded_headers_are_ignored() -> None:
-    headers = _headers(x_forwarded_for="1.2.3.4", true_client_ip="5.6.7.8")
-    assert resolve_client_ip(PEER, headers, header=None, proxy_hops=0) == PEER
+    headers = _headers(x_forwarded_for=FORGED, true_client_ip=FORGED)
+    assert resolve_client_ip(PEER, headers) == PEER
 
 
-def test_platform_header_is_used_and_x_forwarded_for_ignored() -> None:
-    headers = _headers(true_client_ip="198.51.100.7", x_forwarded_for="1.2.3.4")
-    assert resolve_client_ip(PEER, headers, header="True-Client-IP", proxy_hops=0) == "198.51.100.7"
-    missing = _headers(x_forwarded_for="1.2.3.4")
-    assert resolve_client_ip(PEER, missing, header="True-Client-IP", proxy_hops=0) == PEER
-    garbage = _headers(true_client_ip="<script>")
-    assert resolve_client_ip(PEER, garbage, header="True-Client-IP", proxy_hops=0) == PEER
+# --- TRUSTED_PROXIES (Render): rightmost untrusted address --------------------------------
+
+# The chains below have the shape recorded on Render with LOG_FORWARDING_HEADERS (visitor
+# address replaced): Render appends to what the client sent; through the static site's /api
+# rewrite the request passes Cloudflare, Render's proxy (74.220.48.2) and Cloudflare again.
+THROUGH_STATIC_SITE = (
+    f"{FORGED},{VISITOR}, 162.158.42.194, 162.158.42.194,74.220.48.2, 162.158.170.4, 10.28.19.133"
+)
+DIRECT = f"{FORGED},{VISITOR}, 172.69.86.13, 10.25.19.29"
+
+
+@pytest.mark.parametrize("chain", [THROUGH_STATIC_SITE, DIRECT])
+def test_render_chains_resolve_to_the_visitor_not_the_forgery(chain: str) -> None:
+    peer = chain.rsplit(",", 1)[1].strip()
+    headers = _headers(x_forwarded_for=chain, true_client_ip="74.220.48.2")
+    assert resolve_client_ip(peer, headers, trusted_networks=RENDER) == VISITOR
+
+
+def test_an_untrusted_peer_is_the_client_whatever_the_headers_say() -> None:
+    headers = _headers(x_forwarded_for=f"{FORGED}, 10.0.0.1")
+    assert resolve_client_ip(VISITOR, headers, trusted_networks=RENDER) == VISITOR
+
+
+def test_garbage_in_the_chain_stops_at_the_closest_known_address() -> None:
+    headers = _headers(x_forwarded_for="not-an-ip, 162.158.1.1")
+    assert resolve_client_ip(PEER, headers, trusted_networks=RENDER) == "162.158.1.1"
+
+
+def test_a_chain_of_only_proxies_resolves_to_the_leftmost_proxy() -> None:
+    headers = _headers(x_forwarded_for="10.9.9.9, 162.158.1.1")
+    assert resolve_client_ip(PEER, headers, trusted_networks=RENDER) == "10.9.9.9"
+
+
+def test_ipv6_visitors_and_proxies() -> None:
+    headers = _headers(x_forwarded_for="2001:db8::7, 2606:4700::1")
+    assert resolve_client_ip(PEER, headers, trusted_networks=RENDER) == "2001:db8::7"
+
+
+def test_presets_expand_and_bad_networks_are_rejected() -> None:
+    assert len(parse_trusted_proxies("private")) == 6
+    assert len(parse_trusted_proxies("cloudflare, 74.220.48.0/20")) == 23
+    for bad in ("74.220.48.1/20", "not-a-network", "999.0.0.0/8"):
+        with pytest.raises(ValueError):
+            parse_trusted_proxies(bad)
+
+
+# --- Settings and the running app ----------------------------------------------------------
 
 
 def _settings(**values: Any) -> Settings:
@@ -77,17 +122,17 @@ def _settings(**values: Any) -> Settings:
     )
 
 
-def test_only_one_source_may_be_configured() -> None:
+def test_settings_validate_the_client_ip_source() -> None:
+    assert _settings(trusted_proxies="private, cloudflare").trusted_networks
+    assert _settings(trusted_proxies=" ").trusted_networks == ()
     with pytest.raises(ValidationError):
-        _settings(client_ip_header="True-Client-IP", trusted_proxy_hops=1)
+        _settings(trusted_proxies="private", trusted_proxy_hops=1)  # only one source
     with pytest.raises(ValidationError):
-        _settings(client_ip_header="True Client IP")  # not a header name
+        _settings(trusted_proxies="everything")
 
 
-@pytest.fixture
-def behind_nginx(db_session: Session) -> Iterator[TestClient]:
-    """An app configured like docker compose (one trusted proxy), on the rolled-back session."""
-    app = create_app(_settings(trusted_proxy_hops=1, login_rate_limit_per_minute=2))
+def _app_client(db_session: Session, **values: Any) -> Iterator[TestClient]:
+    app = create_app(_settings(login_rate_limit_per_minute=2, **values))
 
     def _get_db() -> Iterator[Session]:
         yield db_session
@@ -95,6 +140,18 @@ def behind_nginx(db_session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_db] = _get_db
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def behind_nginx(db_session: Session) -> Iterator[TestClient]:
+    """Configured like docker compose (one trusted proxy), on the rolled-back session."""
+    yield from _app_client(db_session, trusted_proxy_hops=1)
+
+
+@pytest.fixture
+def behind_render(db_session: Session) -> Iterator[TestClient]:
+    """Configured like render.yaml, on the rolled-back session."""
+    yield from _app_client(db_session, trusted_proxies="private, cloudflare, 74.220.48.0/20")
 
 
 def _login_attempt(client: TestClient, forwarded_for: str) -> int:
@@ -107,14 +164,24 @@ def test_forged_forwarded_for_does_not_escape_the_rate_limit(
     behind_nginx: TestClient, db_session: Session
 ) -> None:
     # Each request claims a different origin on the left; nginx's entry on the right is the same.
-    codes = [_login_attempt(behind_nginx, f"203.0.113.{i}, 198.51.100.7") for i in range(3)]
+    codes = [_login_attempt(behind_nginx, f"203.0.113.{i}, {VISITOR}") for i in range(3)]
     assert codes == [401, 401, 429]
     ips = {row.ip_address for row in db_session.scalars(select(AuditLog))}
-    assert ips == {"198.51.100.7"}  # the audit log records the real client, not the forgery
+    assert ips == {VISITOR}  # the audit log records the real client, not the forgery
 
 
 def test_different_clients_have_separate_budgets(behind_nginx: TestClient) -> None:
     assert [_login_attempt(behind_nginx, f"198.51.100.{i}") for i in range(3)] == [401] * 3
+
+
+def test_untrusted_peer_ignores_forwarded_for_entirely(behind_render: TestClient) -> None:
+    # TestClient connects as "testclient", which is not an address in a trusted network, so
+    # every X-Forwarded-For value is ignored and all attempts share one budget.
+    codes = [_login_attempt(behind_render, f"198.51.100.{i}") for i in range(3)]
+    assert codes == [401, 401, 429]
+
+
+# --- Diagnostics ---------------------------------------------------------------------------
 
 
 def test_forwarding_diagnostics_list_only_present_headers_truncated() -> None:

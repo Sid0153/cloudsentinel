@@ -20,11 +20,22 @@ simulator accepts any credentials, so it must not get a public address. `deploy/
 therefore runs it inside the backend container on `127.0.0.1:5000`, restarted automatically
 if it stops (`deploy/start.sh`). CI checks that only the app's port listens on all interfaces.
 
-**Client addresses.** Render appends to whatever `X-Forwarded-For` a client sends, so the
-backend reads the visitor's address from `True-Client-IP` instead (`CLIENT_IP_HEADER`), which
-Render's Cloudflare edge sets. This matters for the per-IP rate limits and the audit log.
-`LOG_FORWARDING_HEADERS=true` logs, for every request, which forwarding headers arrived and
-which address was chosen; switch it on briefly to check a platform's behaviour, then off.
+**Client addresses** (per-IP rate limits, audit log). Measured on the live service with
+`LOG_FORWARDING_HEADERS=true` (it logs every request's forwarding headers; switch it on
+briefly, then off):
+
+| Request | `X-Forwarded-For` as received, left to right | `True-Client-IP` |
+|---|---|---|
+| Direct to the API | *anything the client sent*, visitor, Cloudflare, Render internal | visitor |
+| Through the static site's `/api` rewrite | *anything the client sent*, visitor, Cloudflare, Cloudflare, Render proxy `74.220.48.x`, Cloudflare, Render internal | Render proxy, not the visitor |
+
+So neither the first `X-Forwarded-For` entry (forgeable) nor `True-Client-IP` (the proxy, for
+every visitor on the rewrite path) identifies the visitor, and the number of hops differs by
+path. The backend walks `X-Forwarded-For` from the right and takes the first address outside
+the proxy networks in `TRUSTED_PROXIES`: `private` (Render internal), `cloudflare` (published
+ranges) and `74.220.48.0/20` (registered to Render at ARIN, `RS-1125`). Addresses further
+left are never read, so forged ones cannot matter. If Render changes its proxy addresses, the
+fallback is the proxy's own address: rate limits get stricter, never bypassable.
 
 **Same origin.** The static site rewrites `/api/*` to the backend, so the browser talks to one
 address: the refresh cookie (`SameSite=Strict`, `Secure`) and the CSP work as in Docker

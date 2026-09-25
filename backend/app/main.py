@@ -86,8 +86,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(
         RequestContextMiddleware,
-        client_ip_header=settings.client_ip_header,
         proxy_hops=settings.trusted_proxy_hops,
+        trusted_networks=settings.trusted_networks,
         log_forwarding=settings.log_forwarding_headers,
     )
 

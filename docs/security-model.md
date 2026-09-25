@@ -38,11 +38,12 @@
   sign-in shares this limit. Starting scans (3/min) and sandbox changes (30/min) have their own
   per-IP limits; hitting one is audited as `RATE_LIMITED`.
 - Failed logins are logged with the client IP only, never the submitted email or password.
-- The client IP (rate limits, audit log) cannot be chosen by the client: only the
-  `X-Forwarded-For` entry added by a trusted proxy is used (`TRUSTED_PROXY_HOPS`), or a header
-  the hosting platform sets (`CLIENT_IP_HEADER`, e.g. `True-Client-IP` on Render). Before
-  Phase 12 the leftmost entry was used, which let anyone bypass the per-IP limits; found by
-  testing the live deployment.
+- The client IP (rate limits, audit log) cannot be chosen by the client. `X-Forwarded-For`
+  is read from the right: the entry added by a fixed number of trusted proxies
+  (`TRUSTED_PROXY_HOPS`, compose), or the rightmost address outside trusted proxy networks
+  (`TRUSTED_PROXIES`, Render). Before Phase 12 the leftmost entry was used, which let anyone
+  bypass the per-IP limits; found by testing the live deployment, fixed from measured
+  headers ([deployment.md](deployment.md)).
 - Validation errors never echo submitted values (a custom 422 handler strips them).
 
 ## Authorization

@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from app.core.client_ip import forwarding_headers, resolve_client_ip
+from app.core.client_ip import Network, forwarding_headers, resolve_client_ip
 from app.core.logging import client_ip_var, request_id_var
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         self,
         app: ASGIApp,
         *,
-        client_ip_header: str | None = None,
         proxy_hops: int = 0,
+        trusted_networks: tuple[Network, ...] = (),
         log_forwarding: bool = False,
     ) -> None:
         super().__init__(app)
-        self._client_ip_header = client_ip_header
         self._proxy_hops = proxy_hops
+        self._trusted_networks = trusted_networks
         self._log_forwarding = log_forwarding
 
     async def dispatch(
@@ -53,8 +53,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         ip = resolve_client_ip(
             request.client.host if request.client else None,
             request.headers,
-            header=self._client_ip_header,
             proxy_hops=self._proxy_hops,
+            trusted_networks=self._trusted_networks,
         )
         request.state.client_ip = ip
         if self._log_forwarding:
