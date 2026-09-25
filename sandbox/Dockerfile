@@ -2,9 +2,12 @@
 # accepts any credentials, so it must only be reachable by the backend.
 FROM python:3.12-slim
 
+# MOTO_EC2_LOAD_DEFAULT_AMIS=false: moto's catalogue of real AMIs costs about 100 MB of
+# memory; the sandbox needs none.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    MOTO_EC2_LOAD_DEFAULT_AMIS=false
 
 WORKDIR /app
 

@@ -27,7 +27,7 @@ def call(method: str, path: str, token: str | None = None, body: Any = None) -> 
     if body is not None:
         data = json.dumps(body).encode()
         request.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(request, data=data, timeout=30) as response:  # noqa: S310
+    with urllib.request.urlopen(request, data=data, timeout=120) as response:  # noqa: S310
         return json.loads(response.read() or "null")
 
 

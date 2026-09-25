@@ -143,3 +143,11 @@ def test_sandbox_endpoint_and_guest_email_are_normalized() -> None:
 def test_empty_values_mean_off() -> None:
     settings = _settings(sandbox_aws_endpoint="", guest_email="")
     assert not settings.sandbox_enabled and settings.guest_email is None
+
+
+def test_sessions_share_one_loader_so_memory_stays_flat() -> None:
+    # Each session would otherwise parse the AWS service descriptions again (several MB each).
+    first = build_session(None, "us-east-1")._session.get_component("data_loader")
+    second = build_session(None, "eu-west-1")._session.get_component("data_loader")
+    sandbox = SandboxSession(ENDPOINT, "us-east-1")._session._session.get_component("data_loader")
+    assert first is second is sandbox

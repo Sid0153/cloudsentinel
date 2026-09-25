@@ -13,7 +13,7 @@ export default function ServerWakeNotice() {
       className="fixed inset-x-0 bottom-0 z-10 border-t border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900"
     >
       The server is taking a while to answer. If nobody has used it for a while it is starting
-      up, which can take up to a minute.
+      up, which can take two or three minutes. This page will continue by itself.
     </div>
   );
 }

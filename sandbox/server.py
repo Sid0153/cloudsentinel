@@ -8,6 +8,7 @@ Never expose this server to the internet: it accepts any credentials. In docker 
 the backend can reach it.
 """
 
+import os
 from typing import Any
 
 from moto.s3.responses import S3Response
@@ -28,4 +29,7 @@ def _bucket_response_get(self: S3Response, bucket_name: str, querystring: dict[s
 S3Response._bucket_response_get = _bucket_response_get  # type: ignore[method-assign]
 
 if __name__ == "__main__":
-    main(["--host", "0.0.0.0", "--port", "5000"])  # noqa: S104 (reachable only inside compose)
+    # 0.0.0.0 inside its own compose container (only the backend can reach it); 127.0.0.1 when
+    # it shares the backend's container (deploy/Dockerfile).
+    host = os.environ.get("SANDBOX_HOST", "0.0.0.0")  # noqa: S104
+    main(["--host", host, "--port", os.environ.get("SANDBOX_PORT", "5000")])

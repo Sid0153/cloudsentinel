@@ -144,3 +144,54 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.sandbox.yml down -v
+
+  deploy-image:
+    name: Deployment image (free-plan limits, production settings)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        # Throwaway database that exists only for this job; not a real secret.
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-throwaway
+          POSTGRES_DB: cloudsentinel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d cloudsentinel"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build deploy/Dockerfile (what Render builds)
+        run: docker build -f deploy/Dockerfile -t cloudsentinel-demo .
+      - name: Start it like Render's free plan (512 MB, 0.1 CPU, $PORT, production)
+        run: |
+          docker run -d --name demo --memory 512m --cpus 0.1 -p 127.0.0.1:10000:10000 \
+            --add-host host.docker.internal:host-gateway \
+            -e PORT=10000 -e APP_ENV=production -e CORS_ORIGINS=https://demo.example \
+            -e GUEST_EMAIL=guest@cloudsentinel.example -e SECRET_KEY="$(openssl rand -hex 32)" \
+            -e DATABASE_URL=postgresql+psycopg://ci:ci-only-throwaway@host.docker.internal:5432/cloudsentinel \
+            cloudsentinel-demo
+          for attempt in $(seq 1 100); do
+            curl -fs http://127.0.0.1:10000/api/health/ready && exit 0
+            sleep 3
+          done
+          exit 1
+      - name: Sandbox end to end against the deployment image
+        run: python3 scripts/sandbox_smoke.py http://127.0.0.1:10000
+      - name: Memory stays well under 512 MB, simulator listens on localhost only
+        run: |
+          used="$(docker stats --no-stream --format '{{.MemUsage}}' demo | cut -d' ' -f1)"
+          echo "memory in use: $used"
+          python3 -c "import sys; v='$used'; mib=float(v[:-3]) * (1024 if v.endswith('GiB') else 1); sys.exit(mib > 450)"
+          # Listening sockets (state 0A) in /proc/net/tcp: the app on 0.0.0.0:10000 (00000000:2710)
+          # and the simulator on 127.0.0.1:5000 (0100007F:1388), nothing else.
+          listening="$(docker exec demo awk '$4 == "0A" {print $2}' /proc/net/tcp | sort | tr '\n' ' ')"
+          echo "listening: $listening"
+          test "$listening" = "00000000:2710 0100007F:1388 "
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs demo

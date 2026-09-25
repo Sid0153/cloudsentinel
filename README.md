@@ -103,6 +103,7 @@ frontend/src/       pages, components, services (API calls), hooks, types
 security-rules/     one YAML file per rule (text, severity, remediation, references)
 infrastructure/     least-privilege IAM policy for the scanner
 sandbox/            simulated AWS for sandbox mode (moto server + policy-status addition)
+deploy/             single-container image for the free public deployment (render.yaml)
 scripts/            sandbox end-to-end check (run in CI)
 docs/               architecture, security model, threat model, risk model, API, database,
                     AWS permissions, setup guide, demo checklist
@@ -122,6 +123,10 @@ Open http://localhost:8080 and sign in. The full walkthrough, including troubles
 **Without an AWS account:** `docker compose -f docker-compose.yml -f docker-compose.sandbox.yml
 up --build`, then click **Explore as guest**. Scans run against a simulated AWS account
 ([docs/sandbox.md](docs/sandbox.md)).
+
+**Free public deployment:** [`render.yaml`](render.yaml) deploys the same sandbox setup to
+Render's free plan with a free Neon database; steps and measured limits in
+[docs/deployment.md](docs/deployment.md).
 
 ## 8. AWS setup
 
@@ -314,4 +319,5 @@ One finding in full (IDs shortened):
 [Threat model](docs/threat-model.md) · [Risk model](docs/risk-model.md) · [API](docs/api.md) ·
 [Database](docs/database-schema.md) · [AWS permissions](docs/aws-permissions.md) ·
 [Setup guide](docs/setup-guide.md) · [Sandbox mode](docs/sandbox.md) ·
+[Deployment](docs/deployment.md) ·
 [Demo and screenshots](docs/demo.md) · [Security rules](security-rules/README.md)

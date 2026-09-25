@@ -14,4 +14,5 @@ fi
 if [ -n "$GUEST_EMAIL" ]; then
     python -m app.cli create-guest
 fi
-exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+# Hosting platforms such as Render choose the port through $PORT.
+exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port "${PORT:-8000}"

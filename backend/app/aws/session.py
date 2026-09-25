@@ -6,6 +6,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 import boto3
 from botocore.config import Config
+from botocore.loaders import Loader, create_loader
+from botocore.session import Session as BotocoreSession
 
 from app.aws.common import BOTO_CONFIG, Boto3Session
 from app.aws.raw import CallerIdentity
@@ -23,6 +25,18 @@ SANDBOX_CREDENTIAL = "sandbox"
 # Bucket names go in the path (http://simulator/bucket), not in the host name.
 _SANDBOX_CLIENT_CONFIG = Config(s3={"addressing_style": "path"})
 _AWS_ACCOUNT_ID_LENGTH = 12
+
+# botocore reads and parses each service's API description (several MB for EC2) once per
+# session. Every scan and sandbox request builds a new session, so without sharing, memory
+# grows with use; on a 512 MB free hosting instance that ends in a restart. The loader only
+# caches read-only data files, so sharing it across sessions and threads is safe.
+_SHARED_LOADER: Loader = create_loader()
+
+
+def _new_session(**kwargs: Any) -> Boto3Session:
+    core = BotocoreSession()
+    core.register_component("data_loader", _SHARED_LOADER)
+    return boto3.Session(botocore_session=core, **kwargs)
 
 
 def _drop_account_host_prefix(request: Any, **_kwargs: Any) -> None:
@@ -48,7 +62,7 @@ class SandboxSession:
     ) -> None:
         key_id, secret, token = credentials or (SANDBOX_CREDENTIAL, SANDBOX_CREDENTIAL, None)
         self.endpoint = endpoint
-        self._session = boto3.Session(
+        self._session = _new_session(
             aws_access_key_id=key_id,
             aws_secret_access_key=secret,
             aws_session_token=token,
@@ -76,7 +90,7 @@ def build_session(role_arn: str | None, region: str) -> Boto3Session:
     """
     endpoint = get_settings().sandbox_aws_endpoint
     base: Boto3Session = (
-        boto3.Session(region_name=region) if endpoint is None else SandboxSession(endpoint, region)
+        _new_session(region_name=region) if endpoint is None else SandboxSession(endpoint, region)
     )
     if role_arn is None:
         return base
@@ -97,7 +111,7 @@ def build_session(role_arn: str | None, region: str) -> Boto3Session:
                 credentials["SessionToken"],
             ),
         )
-    return boto3.Session(
+    return _new_session(
         aws_access_key_id=credentials["AccessKeyId"],
         aws_secret_access_key=credentials["SecretAccessKey"],
         aws_session_token=credentials["SessionToken"],

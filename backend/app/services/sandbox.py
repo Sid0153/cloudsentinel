@@ -1,6 +1,7 @@
 """Sandbox mode glue: builds clients for the simulated AWS, only when sandbox mode is on."""
 
 import logging
+from functools import lru_cache
 
 from app.aws.common import AWS_ERRORS
 from app.aws.sandbox import SANDBOX_REGION, Clients, clients_for, ensure_environment
@@ -10,11 +11,17 @@ from app.core.config import Settings
 logger = logging.getLogger(__name__)
 
 
+@lru_cache
+def _clients_for_endpoint(endpoint: str) -> Clients:
+    # botocore clients are thread-safe; building them once keeps memory flat on small hosts.
+    return clients_for(SandboxSession(endpoint, SANDBOX_REGION))
+
+
 def sandbox_clients(settings: Settings) -> Clients | None:
     """Clients for the simulator, or None in normal mode (never clients for real AWS)."""
     if settings.sandbox_aws_endpoint is None:
         return None
-    return clients_for(SandboxSession(settings.sandbox_aws_endpoint, SANDBOX_REGION))
+    return _clients_for_endpoint(settings.sandbox_aws_endpoint)
 
 
 def prepare_for_scan(settings: Settings) -> None:

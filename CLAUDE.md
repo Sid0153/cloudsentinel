@@ -20,7 +20,7 @@ something works without verifying it, and end each phase with the interview-lear
 | 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
 | 10 Portfolio preparation | Done, green in CI (425 backend, 61 frontend tests, 96% coverage) |
 | 11 Sandbox mode and guest access | Done, green in CI (506 backend, 75 frontend tests, 96% coverage; sandbox end-to-end check in CI) |
-| 12 Free public deployment | NEXT. Wait for the user to say "Proceed to Phase 12" |
+| 12 Free public deployment | Prepared (render.yaml, deploy/Dockerfile, docs/deployment.md; 507 backend tests). Live URL NOT verified yet: waiting for the user to create Neon + Render accounts |
 
 Phases 11-12 (user's goal): a public link where anyone can use the real, working app for free,
 without an AWS account and without offering it to customers. Phase 11 added sandbox mode (the
@@ -75,6 +75,9 @@ mapping in `tests/unit/test_iam_policy.py`. Tests fail if any of these is stale.
   triggers): tests must not try to clean it up with DELETE.
 - Every new API route must be added to `EXPECTED_ACCESS` or `PUBLIC_ROUTES` in
   `backend/tests/api/test_rbac.py`.
+- `deploy/Dockerfile` (backend + simulator on 127.0.0.1 in one container) is what Render
+  builds; CI runs it with 512 MB / 0.1 CPU. Keep memory flat: AWS sessions share one botocore
+  loader (`aws/session.py`) and sandbox clients are built once.
 - Do not run `ruff format` on existing files: the codebase is not format-clean and CI only runs
   `ruff check`. Format new files only.
 - New rules need a check, a `registry.py` entry, a YAML file, a risk profile and tests (see
