@@ -88,6 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         RequestContextMiddleware,
         client_ip_header=settings.client_ip_header,
         proxy_hops=settings.trusted_proxy_hops,
+        log_forwarding=settings.log_forwarding_headers,
     )
 
     # One limiter per app instance (so tests are isolated); keyed by client IP.

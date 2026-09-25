@@ -10,6 +10,11 @@ results, with role-based access and an append-only audit log.
 It is a portfolio project (final-year B.Tech IT). Everything below describes what is
 implemented and tested; limitations are listed at the end.
 
+**Live demo: https://cloudsentinel-demo.onrender.com** (click *Explore as guest*). It runs the
+real application on free hosting, scanning a **simulated** AWS account, not a real one
+([docs/sandbox.md](docs/sandbox.md)). After a quiet period the server sleeps; the first visit
+then waits two or three minutes while it starts.
+
 ## 1. Project overview
 
 | | |
@@ -17,7 +22,7 @@ implemented and tested; limitations are listed at the end.
 | Backend | FastAPI (Python 3.12), SQLAlchemy 2, Alembic, PostgreSQL 16, boto3 |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Router 7 |
 | Runs as | Docker Compose: nginx (serves the app, proxies `/api`), backend, database |
-| Tests | 519 backend (pytest, moto, real PostgreSQL; 96% coverage), 75 frontend (Vitest, Testing Library) |
+| Tests | 521 backend (pytest, moto, real PostgreSQL; 96% coverage), 75 frontend (Vitest, Testing Library) |
 | CI | GitHub Actions: lint, types, tests, dependency audits, secret scan, Docker smoke test |
 
 ## 2. Problem statement
@@ -171,6 +176,7 @@ fails if the policy grants anything the code does not call, or misses anything i
 | `GUEST_EMAIL` | no | Enables *Explore as guest* as this non-admin account |
 | `SCAN_RATE_LIMIT_PER_MINUTE`, `SANDBOX_RATE_LIMIT_PER_MINUTE` | no | Per-IP limits (3 and 30 by default) |
 | `TRUSTED_PROXY_HOPS` or `CLIENT_IP_HEADER` | behind a proxy | Where the client IP comes from: proxies appending to `X-Forwarded-For` (compose: 1) or a platform header (Render: `True-Client-IP`) |
+| `LOG_FORWARDING_HEADERS` | no | Diagnostics: log the forwarding headers of each request (off by default) |
 
 `python -m app.cli check-config` validates all of it (the container runs it at start-up) and
 names bad settings without printing their values.
@@ -193,7 +199,7 @@ Backend (from `backend/`), against a scratch PostgreSQL database:
 
 ```bash
 export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/cloudsentinel_test
-pytest --cov=app          # 519 tests; AWS is mocked with moto, credentials are fake
+pytest --cov=app          # 521 tests; AWS is mocked with moto, credentials are fake
 ruff check . && mypy
 pip-audit -r requirements.txt --require-hashes --disable-pip
 ```

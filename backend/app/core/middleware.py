@@ -1,3 +1,4 @@
+import logging
 import re
 import uuid
 from collections.abc import Awaitable, Callable
@@ -7,8 +8,10 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from app.core.client_ip import resolve_client_ip
+from app.core.client_ip import forwarding_headers, resolve_client_ip
 from app.core.logging import client_ip_var, request_id_var
+
+logger = logging.getLogger(__name__)
 
 # Only accept a caller-supplied request ID if it is short and boring; otherwise a client
 # could inject newlines or huge strings into our logs.
@@ -28,11 +31,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     """Attaches a request ID, the client address and baseline security headers."""
 
     def __init__(
-        self, app: ASGIApp, *, client_ip_header: str | None = None, proxy_hops: int = 0
+        self,
+        app: ASGIApp,
+        *,
+        client_ip_header: str | None = None,
+        proxy_hops: int = 0,
+        log_forwarding: bool = False,
     ) -> None:
         super().__init__(app)
         self._client_ip_header = client_ip_header
         self._proxy_hops = proxy_hops
+        self._log_forwarding = log_forwarding
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -48,6 +57,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             proxy_hops=self._proxy_hops,
         )
         request.state.client_ip = ip
+        if self._log_forwarding:
+            peer = request.client.host if request.client else None
+            # %r quotes the values, so a client cannot inject line breaks into the log.
+            logger.info(
+                "Forwarding headers: %r -> client %s",
+                forwarding_headers(peer, request.headers),
+                ip,
+            )
         ip_token = client_ip_var.set(ip)
         try:
             response = await call_next(request)

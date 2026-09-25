@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 
-from app.core.client_ip import resolve_client_ip
+from app.core import middleware
+from app.core.client_ip import forwarding_headers, resolve_client_ip
 from app.core.config import Settings
 from app.database.session import get_db
 from app.main import create_app
@@ -114,3 +115,33 @@ def test_forged_forwarded_for_does_not_escape_the_rate_limit(
 
 def test_different_clients_have_separate_budgets(behind_nginx: TestClient) -> None:
     assert [_login_attempt(behind_nginx, f"198.51.100.{i}") for i in range(3)] == [401] * 3
+
+
+def test_forwarding_diagnostics_list_only_present_headers_truncated() -> None:
+    headers = _headers(x_forwarded_for=["1.2.3.4", "5.6.7.8"], cf_connecting_ip="9.9.9.9", host="x")
+    assert forwarding_headers(PEER, headers) == {
+        "peer": PEER,
+        "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+        "cf-connecting-ip": "9.9.9.9",
+    }
+    long_value = forwarding_headers(PEER, _headers(forwarded="a" * 500))["forwarded"]
+    assert long_value is not None and len(long_value) == 200
+
+
+def test_forwarding_diagnostics_are_logged_only_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # create_app() replaces the root log handlers, so record the middleware's messages directly.
+    messages: list[str] = []
+    monkeypatch.setattr(
+        middleware.logger, "info", lambda message, *args: messages.append(message % args)
+    )
+    for enabled in (False, True):
+        messages.clear()
+        with TestClient(create_app(_settings(log_forwarding_headers=enabled))) as client:
+            client.get("/api/health/live", headers={"X-Forwarded-For": "1.2.3.4"})
+        logged = [message for message in messages if "Forwarding headers" in message]
+        assert len(logged) == (1 if enabled else 0)
+        if enabled:
+            # Values are logged quoted (repr), so client-supplied text cannot fake log lines.
+            assert "'x-forwarded-for': '1.2.3.4'" in logged[0]

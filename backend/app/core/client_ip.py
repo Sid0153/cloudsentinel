@@ -23,6 +23,28 @@ def _valid_ip(value: str) -> str | None:
         return None
 
 
+# Headers that proxies and CDNs use for the client address. LOG_FORWARDING_HEADERS logs them,
+# to find out which ones a hosting platform really sets before trusting any of them.
+FORWARDING_HEADERS = (
+    "x-forwarded-for",
+    "true-client-ip",
+    "cf-connecting-ip",
+    "x-real-ip",
+    "forwarded",
+)
+_MAX_LOGGED_LENGTH = 200
+
+
+def forwarding_headers(peer: str | None, headers: Headers) -> dict[str, str | None]:
+    """The direct peer and every forwarding header present (truncated), for diagnostics."""
+    found: dict[str, str | None] = {"peer": peer}
+    for name in FORWARDING_HEADERS:
+        values = headers.getlist(name)
+        if values:
+            found[name] = ", ".join(values)[:_MAX_LOGGED_LENGTH]
+    return found
+
+
 def resolve_client_ip(
     peer: str | None, headers: Headers, *, header: str | None, proxy_hops: int
 ) -> str | None:

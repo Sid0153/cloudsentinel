@@ -23,6 +23,8 @@ if it stops (`deploy/start.sh`). CI checks that only the app's port listens on a
 **Client addresses.** Render appends to whatever `X-Forwarded-For` a client sends, so the
 backend reads the visitor's address from `True-Client-IP` instead (`CLIENT_IP_HEADER`), which
 Render's Cloudflare edge sets. This matters for the per-IP rate limits and the audit log.
+`LOG_FORWARDING_HEADERS=true` logs, for every request, which forwarding headers arrived and
+which address was chosen; switch it on briefly to check a platform's behaviour, then off.
 
 **Same origin.** The static site rewrites `/api/*` to the backend, so the browser talks to one
 address: the refresh cookie (`SameSite=Strict`, `Secure`) and the CSP work as in Docker

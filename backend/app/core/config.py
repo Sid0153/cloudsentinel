@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # the direct peer address, and X-Forwarded-For is ignored.
     client_ip_header: str | None = None
     trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    # Diagnostics: log the forwarding headers of every request, to see what a hosting platform
+    # really sends before choosing one of the two settings above. Off in normal operation.
+    log_forwarding_headers: bool = False
     # Email of the shared guest account. When set, POST /api/auth/guest signs visitors in
     # as that user without a password (for public demos). The account must not be an ADMIN.
     guest_email: str | None = None
