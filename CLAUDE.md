@@ -20,7 +20,7 @@ something works without verifying it, and end each phase with the interview-lear
 | 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
 | 10 Portfolio preparation | Done, green in CI (425 backend, 61 frontend tests, 96% coverage) |
 | 11 Sandbox mode and guest access | Done, green in CI (506 backend, 75 frontend tests, 96% coverage; sandbox end-to-end check in CI) |
-| 12 Free public deployment | Prepared (render.yaml, deploy/Dockerfile, docs/deployment.md; 519 backend tests). Deployed at https://cloudsentinel-demo.onrender.com; live checks passed; client-IP fix pending live verification |
+| 12 Free public deployment | Done, live at https://cloudsentinel-demo.onrender.com (528 backend, 75 frontend tests, 96% coverage; CI runs the deployment image with free-plan limits). Client-IP spoofing found live and fixed from measured headers |
 
 Phases 11-12 (user's goal): a public link where anyone can use the real, working app for free,
 without an AWS account and without offering it to customers. Phase 11 added sandbox mode (the
@@ -75,6 +75,10 @@ mapping in `tests/unit/test_iam_policy.py`. Tests fail if any of these is stale.
   triggers): tests must not try to clean it up with DELETE.
 - Every new API route must be added to `EXPECTED_ACCESS` or `PUBLIC_ROUTES` in
   `backend/tests/api/test_rbac.py`.
+- Client IP (rate limits, audit): never trust the left of X-Forwarded-For. Compose uses
+  `TRUSTED_PROXY_HOPS=1`; Render uses `TRUSTED_PROXIES` (rightmost untrusted; the measured
+  header chains are in docs/deployment.md). Render Blueprint sync adds env vars but does not
+  delete removed ones: remove those in the dashboard (ask the user first).
 - `deploy/Dockerfile` (backend + simulator on 127.0.0.1 in one container) is what Render
   builds; CI runs it with 512 MB / 0.1 CPU. Keep memory flat: AWS sessions share one botocore
   loader (`aws/session.py`) and sandbox clients are built once.
