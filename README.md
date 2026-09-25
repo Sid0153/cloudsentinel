@@ -7,9 +7,6 @@ through boto3, discovers EC2, S3, IAM and CloudTrail resources, checks them agai
 security rules, gives every finding an explainable 0-100 risk score, and lets a team triage the
 results, with role-based access and an append-only audit log.
 
-It is a portfolio project (final-year B.Tech IT). Everything below describes what is
-implemented and tested; limitations are listed at the end.
-
 **Live demo: https://cloudsentinel-demo.onrender.com** (click *Explore as guest*). It runs the
 real application on free hosting, scanning a **simulated** AWS account, not a real one
 ([docs/sandbox.md](docs/sandbox.md)). After a quiet period the server sleeps; the first visit
