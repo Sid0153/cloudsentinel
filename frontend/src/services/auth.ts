@@ -9,6 +9,13 @@ export async function login(email: string, password: string): Promise<User> {
   return data.user;
 }
 
+/** Signs in as the shared guest account (only offered when GET /api/about says so). */
+export async function guestLogin(): Promise<User> {
+  const data = await readJson<TokenResponse>(await send("/auth/guest", { method: "POST" }));
+  tokenStore.set(data.access_token);
+  return data.user;
+}
+
 async function requestRefresh(): Promise<User> {
   try {
     const data = await readJson<TokenResponse>(await send("/auth/refresh", { method: "POST" }));

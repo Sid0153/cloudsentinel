@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.aws.collectors import iam as iam_collector
 from app.aws.common import Boto3Session
 from app.aws.session import SessionBuilder, build_session
+from app.core.rate_limit import SlidingWindowRateLimiter
+from app.models.audit_log import AuditLog
 from app.models.resource import Resource
 from app.models.scan import Scan, ScanStatus
 from app.models.user import Role, User
@@ -263,3 +265,17 @@ def test_restart_marks_unfinished_scans_as_failed(db_session: Session) -> None:
     db_session.expire_all()
     assert [s.status for s in scans] == [ScanStatus.FAILED, ScanStatus.FAILED, ScanStatus.COMPLETED]
     assert scans[0].error_summary is not None and "restarted" in scans[0].error_summary
+
+
+@pytest.mark.usefixtures("use_builder")
+def test_starting_scans_is_rate_limited_per_client(
+    app: FastAPI, db_client: TestClient, db_session: Session, analyst: User
+) -> None:
+    app.state.scan_limiter = SlidingWindowRateLimiter(1)
+    body = {"aws_account_id": str(uuid.uuid4())}
+    first = db_client.post("/api/scans", headers=bearer(analyst), json=body)
+    second = db_client.post("/api/scans", headers=bearer(analyst), json=body)
+    assert first.status_code == 404  # counted even though the account does not exist
+    assert second.status_code == 429
+    [event] = db_session.scalars(select(AuditLog).where(AuditLog.action == "RATE_LIMITED"))
+    assert event.details == {"limit": "scan"} and event.actor_id == analyst.id

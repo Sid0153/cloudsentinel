@@ -45,10 +45,11 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install locked dependencies (hash-checked)
         run: pip install --require-hashes -r requirements-dev.txt
-      - name: Dependency audit (pip-audit, runtime and dev lockfiles)
+      - name: Dependency audit (pip-audit, runtime, dev and sandbox lockfiles)
         run: |
           pip-audit -r requirements.txt --require-hashes --disable-pip --progress-spinner off
           pip-audit -r requirements-dev.txt --require-hashes --disable-pip --progress-spinner off
+          pip-audit -r ../sandbox/requirements.txt --require-hashes --disable-pip --progress-spinner off
       - name: Lint (ruff, including bandit-style security rules)
         run: ruff check .
       - name: Type check (mypy --strict)
@@ -125,9 +126,21 @@ jobs:
           headers="$(curl -fsSI http://localhost:8080/)"
           echo "$headers" | grep -qi "content-security-policy"
           echo "$headers" | grep -qi "x-frame-options: DENY"
+      - name: Restart in sandbox mode (simulated AWS, guest access)
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.sandbox.yml
+          up -d --build --wait --wait-timeout 240
+      - name: Sandbox end to end (guest sign-in, scans, switches, findings open and close)
+        run: python3 scripts/sandbox_smoke.py http://localhost:8080
+      - name: Simulator runs hardened and is not published on the host
+        run: |
+          test "$(docker compose -f docker-compose.yml -f docker-compose.sandbox.yml exec -T sandbox-aws id -u)" != "0"
+          ! docker compose -f docker-compose.yml -f docker-compose.sandbox.yml exec -T sandbox-aws touch /app/probe
+          simulator="$(docker compose -f docker-compose.yml -f docker-compose.sandbox.yml ps -q sandbox-aws)"
+          test "$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$simulator")" = "{}"
       - name: Show container logs on failure
         if: failure()
-        run: docker compose logs --no-color
+        run: docker compose -f docker-compose.yml -f docker-compose.sandbox.yml logs --no-color
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml -f docker-compose.sandbox.yml down -v

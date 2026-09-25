@@ -1,0 +1,5 @@
+# The simulated AWS used by sandbox mode. Only the services CloudSentinel scans are installed,
+# plus the web server moto runs in. Lock with the command at the top of requirements.txt.
+moto[ec2,iam,s3,s3control,cloudtrail,sts]>=5.2.3,<6.0
+flask>=3.1,<4.0
+flask-cors>=6.0,<7.0

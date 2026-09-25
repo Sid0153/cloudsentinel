@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import (
+    about,
     audit_logs,
     auth,
     aws_accounts,
@@ -9,6 +10,7 @@ from app.api import (
     health,
     resources,
     rules,
+    sandbox,
     scans,
     users,
 )
@@ -24,3 +26,5 @@ api_router.include_router(findings.router)
 api_router.include_router(rules.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(audit_logs.router)
+api_router.include_router(about.router)
+api_router.include_router(sandbox.router)

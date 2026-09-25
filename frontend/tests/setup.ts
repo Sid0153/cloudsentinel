@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { resetSlowRequests } from "../src/services/http";
 import { tokenStore } from "../src/services/tokenStore";
 
 // The first test in a file also pays for compiling the app. On a cold CI runner that can take
@@ -12,5 +13,6 @@ configure({ asyncUtilTimeout: 5000 });
 afterEach(() => {
   cleanup();
   tokenStore.set(null);
+  resetSlowRequests();
   vi.unstubAllGlobals();
 });

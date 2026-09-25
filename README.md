@@ -17,7 +17,7 @@ implemented and tested; limitations are listed at the end.
 | Backend | FastAPI (Python 3.12), SQLAlchemy 2, Alembic, PostgreSQL 16, boto3 |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Router 7 |
 | Runs as | Docker Compose: nginx (serves the app, proxies `/api`), backend, database |
-| Tests | 425 backend (pytest, moto, real PostgreSQL; 96% coverage), 61 frontend (Vitest, Testing Library) |
+| Tests | 506 backend (pytest, moto, real PostgreSQL; 96% coverage), 75 frontend (Vitest, Testing Library) |
 | CI | GitHub Actions: lint, types, tests, dependency audits, secret scan, Docker smoke test |
 
 ## 2. Problem statement
@@ -52,6 +52,11 @@ missing permission quietly turning into "no problems found".
 - **Security:** Argon2id passwords, short-lived access tokens, rotating refresh cookie with reuse
   detection, lockout and rate limiting, role-based access enforced on every route (tested for
   every route and role), append-only audit log enforced by database triggers.
+- **Sandbox mode and guest access** (optional, for demos without an AWS account): the real app
+  scans a simulated AWS account (moto as a separate server). A Sandbox page has one switch per
+  rule to break or fix a setting; the next scan opens or closes the matching finding. Visitors
+  can *Explore as guest* (shared non-admin account, rate limited, audited).
+  [docs/sandbox.md](docs/sandbox.md)
 
 ## 4. Architecture
 
@@ -85,7 +90,7 @@ with no AWS, database or HTTP code, which keeps them easy to test. Details and d
 backend/
   app/api/          REST routes (thin: validation, auth, call a service)
   app/auth/         passwords, tokens, sessions, role dependencies
-  app/aws/          boto3 session, collectors (AWS calls), normalizers (pure)
+  app/aws/          boto3 session, collectors (AWS calls), normalizers (pure), sandbox switches
   app/scans/        scan lifecycle, discovery, persistence
   app/rules/        rule engine, catalog loader, checks (pure)
   app/risk/         risk model and per-rule profiles (pure)
@@ -97,6 +102,8 @@ backend/
 frontend/src/       pages, components, services (API calls), hooks, types
 security-rules/     one YAML file per rule (text, severity, remediation, references)
 infrastructure/     least-privilege IAM policy for the scanner
+sandbox/            simulated AWS for sandbox mode (moto server + policy-status addition)
+scripts/            sandbox end-to-end check (run in CI)
 docs/               architecture, security model, threat model, risk model, API, database,
                     AWS permissions, setup guide, demo checklist
 ```
@@ -111,6 +118,10 @@ docker compose exec backend python -m app.cli create-admin --email you@example.c
 
 Open http://localhost:8080 and sign in. The full walkthrough, including troubleshooting, is in
 [docs/setup-guide.md](docs/setup-guide.md).
+
+**Without an AWS account:** `docker compose -f docker-compose.yml -f docker-compose.sandbox.yml
+up --build`, then click **Explore as guest**. Scans run against a simulated AWS account
+([docs/sandbox.md](docs/sandbox.md)).
 
 ## 8. AWS setup
 
@@ -151,6 +162,9 @@ fails if the policy grants anything the code does not call, or misses anything i
 | `CORS_ORIGINS` | no | Comma-separated origins; no wildcards; must be `https://` in production |
 | `DATABASE_URL` | outside Docker | `postgresql+psycopg://user:password@127.0.0.1:5432/db` |
 | `AWS_PROFILE`, `AWS_CONFIG_DIR` | for real scans | Used by `docker-compose.aws.yml`; no keys in `.env` |
+| `SANDBOX_AWS_ENDPOINT` | no | Sandbox mode: scan the simulator at this URL (set by `docker-compose.sandbox.yml`; AWS hosts are refused) |
+| `GUEST_EMAIL` | no | Enables *Explore as guest* as this non-admin account |
+| `SCAN_RATE_LIMIT_PER_MINUTE`, `SANDBOX_RATE_LIMIT_PER_MINUTE` | no | Per-IP limits (3 and 30 by default) |
 
 `python -m app.cli check-config` validates all of it (the container runs it at start-up) and
 names bad settings without printing their values.
@@ -173,7 +187,7 @@ Backend (from `backend/`), against a scratch PostgreSQL database:
 
 ```bash
 export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/cloudsentinel_test
-pytest --cov=app          # 425 tests; AWS is mocked with moto, credentials are fake
+pytest --cov=app          # 506 tests; AWS is mocked with moto, credentials are fake
 ruff check . && mypy
 pip-audit -r requirements.txt --require-hashes --disable-pip
 ```
@@ -265,7 +279,9 @@ One finding in full (IDs shortened):
 ## 16. Limitations
 
 - **Never run against a real AWS account by the author yet;** all automated scanning uses moto,
-  which does not implement everything (for example bucket policy status is supplied by the tests).
+  which does not implement everything (for example bucket policy status is supplied by the tests,
+  and the sandbox image adds a simplified version). Sandbox mode is a simulation and is labelled
+  as one everywhere it appears.
 - **Coverage:** four services (EC2, S3, IAM, CloudTrail) and only the registered regions and the
   `aws` partition. No RDS, Lambda, EKS, KMS, VPC flow logs, GuardDuty, etc.
 - **Check depth:** IAM is pattern matching (`*` or `service:*` on `*`; AdministratorAccess by
@@ -297,5 +313,5 @@ One finding in full (IDs shortened):
 [Architecture](docs/architecture.md) · [Security model](docs/security-model.md) ·
 [Threat model](docs/threat-model.md) · [Risk model](docs/risk-model.md) · [API](docs/api.md) ·
 [Database](docs/database-schema.md) · [AWS permissions](docs/aws-permissions.md) ·
-[Setup guide](docs/setup-guide.md) · [Demo and screenshots](docs/demo.md) ·
-[Security rules](security-rules/README.md)
+[Setup guide](docs/setup-guide.md) · [Sandbox mode](docs/sandbox.md) ·
+[Demo and screenshots](docs/demo.md) · [Security rules](security-rules/README.md)

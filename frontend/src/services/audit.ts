@@ -19,6 +19,9 @@ export const AUDIT_ACTIONS = [
   "SCAN_COMPLETED",
   "SCAN_FAILED",
   "FINDING_STATUS_CHANGED",
+  "RATE_LIMITED",
+  "SANDBOX_CHANGED",
+  "SANDBOX_RESET",
 ] as const;
 
 export interface AuditQuery {

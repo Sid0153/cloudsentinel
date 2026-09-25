@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CloudSentinel API",
-    "description": "\nRead-only AWS security scanning: discover resources, evaluate security rules, score risk.\n\n**Authentication.** `POST /api/auth/login` returns a short-lived access token; send it as\n`Authorization: Bearer <token>`. A refresh token is set as an httpOnly cookie and exchanged at\n`POST /api/auth/refresh`. Roles: VIEWER (read), ANALYST (+ scans and triage), ADMIN (+ users,\nAWS accounts, audit log). The role a route needs is in its description and in docs/api.md.\n\n**Lists** return one page (`limit`, `offset`); the `X-Total-Count` header holds the total.\n\n**Errors** have a `detail` field. Validation errors (422) never echo the submitted values.\n",
+    "description": "\nRead-only AWS security scanning: discover resources, evaluate security rules, score risk.\n\n**Authentication.** `POST /api/auth/login` returns a short-lived access token; send it as\n`Authorization: Bearer <token>`. A refresh token is set as an httpOnly cookie and exchanged at\n`POST /api/auth/refresh`. Roles: VIEWER (read), ANALYST (+ scans and triage), ADMIN (+ users,\nAWS accounts, audit log). The role a route needs is in its description and in docs/api.md.\n\n**Lists** return one page (`limit`, `offset`); the `X-Total-Count` header holds the total.\n\n**Errors** have a `detail` field. Validation errors (422) never echo the submitted values.\n\n**Sandbox mode** (when enabled): scans run against a simulated AWS; see `GET /api/about`.\n",
     "version": "0.1.0"
   },
   "paths": {
@@ -104,6 +104,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/guest": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Guest Login",
+        "description": "Signs in as the shared guest account (only when GUEST_EMAIL is set). No password.",
+        "operationId": "guest_login_api_auth_guest_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but your role does not allow this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; retry after the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
                 }
               }
             }
@@ -226,6 +278,16 @@
           },
           "401": {
             "description": "Not signed in, or the access token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but your role does not allow this",
             "content": {
               "application/json": {
                 "schema": {
@@ -788,6 +850,16 @@
           },
           "409": {
             "description": "Conflicts with the current state (see the detail message)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; retry after the Retry-After header",
             "content": {
               "application/json": {
                 "schema": {
@@ -1951,10 +2023,307 @@
           }
         }
       }
+    },
+    "/api/about": {
+      "get": {
+        "tags": [
+          "about"
+        ],
+        "summary": "About",
+        "description": "What the sign-in page needs to know before anyone signs in. No sign-in needed.",
+        "operationId": "about_api_about_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AboutResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sandbox": {
+      "get": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Get Sandbox",
+        "description": "The simulated AWS account and the current state of every switch.",
+        "operationId": "get_sandbox_api_sandbox_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the access token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but your role does not allow this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The simulated AWS (sandbox mode) is not reachable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sandbox/controls/{key}": {
+      "patch": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Update Control",
+        "description": "Makes one setting insecure (or fixes it). Run a scan afterwards to see the effect.",
+        "operationId": "update_control_api_sandbox_controls__key__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SandboxControlUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxControlPublic"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the access token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but your role does not allow this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The simulated AWS (sandbox mode) is not reachable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; retry after the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sandbox/reset": {
+      "post": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Reset Sandbox",
+        "description": "Puts every switch back to its default state.",
+        "operationId": "reset_sandbox_api_sandbox_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the access token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but your role does not allow this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The simulated AWS (sandbox mode) is not reachable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; retry after the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "AboutResponse": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "sandbox_mode": {
+            "type": "boolean",
+            "title": "Sandbox Mode"
+          },
+          "guest_access": {
+            "type": "boolean",
+            "title": "Guest Access"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "sandbox_mode",
+          "guest_access"
+        ],
+        "title": "AboutResponse"
+      },
       "AuditAction": {
         "type": "string",
         "enum": [
@@ -1973,7 +2342,10 @@
           "SCAN_STARTED",
           "SCAN_COMPLETED",
           "SCAN_FAILED",
-          "FINDING_STATUS_CHANGED"
+          "FINDING_STATUS_CHANGED",
+          "RATE_LIMITED",
+          "SANDBOX_CHANGED",
+          "SANDBOX_RESET"
         ],
         "title": "AuditAction"
       },
@@ -3064,6 +3436,83 @@
         ],
         "title": "RulePublic"
       },
+      "SandboxControlPublic": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "insecure": {
+            "type": "boolean",
+            "title": "Insecure"
+          },
+          "insecure_by_default": {
+            "type": "boolean",
+            "title": "Insecure By Default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "description",
+          "rule_id",
+          "insecure",
+          "insecure_by_default"
+        ],
+        "title": "SandboxControlPublic"
+      },
+      "SandboxControlUpdate": {
+        "properties": {
+          "insecure": {
+            "type": "boolean",
+            "title": "Insecure"
+          }
+        },
+        "type": "object",
+        "required": [
+          "insecure"
+        ],
+        "title": "SandboxControlUpdate"
+      },
+      "SandboxState": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "region": {
+            "type": "string",
+            "title": "Region"
+          },
+          "controls": {
+            "items": {
+              "$ref": "#/components/schemas/SandboxControlPublic"
+            },
+            "type": "array",
+            "title": "Controls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "region",
+          "controls"
+        ],
+        "title": "SandboxState"
+      },
       "ScanCreate": {
         "properties": {
           "aws_account_id": {
@@ -3243,7 +3692,8 @@
           "AWS_ACCOUNT",
           "SCAN",
           "FINDING",
-          "ROUTE"
+          "ROUTE",
+          "SANDBOX_CONTROL"
         ],
         "title": "TargetType"
       },
@@ -3456,6 +3906,14 @@
     {
       "name": "audit",
       "description": "Append-only log of security-relevant actions (ADMIN)."
+    },
+    {
+      "name": "about",
+      "description": "Deployment mode, for the sign-in page (no sign-in needed)."
+    },
+    {
+      "name": "sandbox",
+      "description": "Sandbox mode only: change the simulated AWS environment (ANALYST+)."
     }
   ]
 }

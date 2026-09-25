@@ -64,4 +64,17 @@ describe("Settings", () => {
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(callsTo(fetchMock, "POST /api/auth/logout")).toBe(1);
   });
+
+  it("explains that the shared guest password cannot be changed", async () => {
+    renderAs("ANALYST", "/settings", {
+      ...BASE,
+      "POST /api/auth/change-password": { status: 403 },
+    });
+    fireEvent.change(await screen.findByLabelText("Current password"), { target: { value: "x-password-123" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "a-new-password-123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    expect(
+      await screen.findByText("The shared guest account's password cannot be changed."),
+    ).toBeInTheDocument();
+  });
 });

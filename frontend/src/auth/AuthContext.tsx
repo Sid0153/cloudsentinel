@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { onSessionExpired } from "../services/api";
-import { login, logout, refreshSession } from "../services/auth";
+import { guestLogin, login, logout, refreshSession } from "../services/auth";
 import type { User } from "../types/auth";
 
 type AuthState =
@@ -20,6 +20,7 @@ type AuthState =
 interface AuthContextValue {
   state: AuthState;
   signIn: (email: string, password: string) => Promise<void>;
+  signInAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -50,6 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "authenticated", user });
   }, []);
 
+  const signInAsGuest = useCallback(async () => {
+    const user = await guestLogin();
+    setState({ status: "authenticated", user });
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       await logout();
@@ -59,7 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "unauthenticated" });
   }, []);
 
-  const value = useMemo(() => ({ state, signIn, signOut }), [state, signIn, signOut]);
+  const value = useMemo(
+    () => ({ state, signIn, signInAsGuest, signOut }),
+    [state, signIn, signInAsGuest, signOut],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

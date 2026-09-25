@@ -27,6 +27,8 @@ AWS accounts, audit log). The role a route needs is in its description and in do
 **Lists** return one page (`limit`, `offset`); the `X-Total-Count` header holds the total.
 
 **Errors** have a `detail` field. Validation errors (422) never echo the submitted values.
+
+**Sandbox mode** (when enabled): scans run against a simulated AWS; see `GET /api/about`.
 """
 
 OPENAPI_TAGS = [
@@ -40,6 +42,11 @@ OPENAPI_TAGS = [
     {"name": "rules", "description": "The security rules every scan runs."},
     {"name": "dashboard", "description": "Summary numbers for the dashboard."},
     {"name": "audit", "description": "Append-only log of security-relevant actions (ADMIN)."},
+    {"name": "about", "description": "Deployment mode, for the sign-in page (no sign-in needed)."},
+    {
+        "name": "sandbox",
+        "description": "Sandbox mode only: change the simulated AWS environment (ANALYST+).",
+    },
 ]
 
 
@@ -81,6 +88,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # One limiter per app instance (so tests are isolated); keyed by client IP.
     app.state.login_limiter = SlidingWindowRateLimiter(settings.login_rate_limit_per_minute)
+    app.state.scan_limiter = SlidingWindowRateLimiter(settings.scan_rate_limit_per_minute)
+    app.state.sandbox_limiter = SlidingWindowRateLimiter(settings.sandbox_rate_limit_per_minute)
+    if settings.sandbox_enabled:
+        logger.info("Sandbox mode: AWS calls go to the simulator, not to real AWS")
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix="/api")

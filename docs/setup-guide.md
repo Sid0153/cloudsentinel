@@ -51,6 +51,19 @@ It prompts for a password (12 to 128 characters) without echoing it. Sign in at
 http://localhost:8080 and create other users on the **Users** page (roles: VIEWER, ANALYST,
 ADMIN).
 
+## Try it without AWS: sandbox mode
+
+To see everything working without an AWS account, start the stack with the sandbox override
+instead of steps 4 to 6:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
+```
+
+Open http://localhost:8080, click **Explore as guest**, start a scan, then break or fix settings
+on the **Sandbox** page and scan again. Scans run against a simulated AWS account
+([sandbox.md](sandbox.md)); nothing touches a real one.
+
 ## 5. Give CloudSentinel read-only AWS access (for real scans)
 
 Follow [aws-permissions.md](aws-permissions.md): create an identity with the 14-action

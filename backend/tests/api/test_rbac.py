@@ -23,6 +23,8 @@ PUBLIC_ROUTES: set[Route] = {
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/refresh"),
     ("POST", "/api/auth/logout"),
+    ("POST", "/api/auth/guest"),  # 404 unless GUEST_EMAIL is set (tests/api/test_guest.py)
+    ("GET", "/api/about"),
 }
 
 # Minimum role required. None means "any signed-in user".
@@ -46,6 +48,11 @@ EXPECTED_ACCESS: dict[Route, Role | None] = {
     ("GET", "/api/rules"): None,
     ("GET", "/api/dashboard/summary"): None,
     ("GET", "/api/audit-logs"): Role.ADMIN,
+    # Sandbox routes answer 404 when sandbox mode is off, which still proves the role check
+    # ran first (a forbidden role gets 403). With sandbox mode on: tests/api/test_sandbox.py.
+    ("GET", "/api/sandbox"): None,
+    ("PATCH", "/api/sandbox/controls/{key}"): Role.ANALYST,
+    ("POST", "/api/sandbox/reset"): Role.ANALYST,
 }
 
 _RANK = {Role.VIEWER: 1, Role.ANALYST: 2, Role.ADMIN: 3}

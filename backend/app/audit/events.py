@@ -26,6 +26,10 @@ class AuditAction(enum.StrEnum):
     SCAN_COMPLETED = "SCAN_COMPLETED"  # COMPLETED or COMPLETED_WITH_ERRORS
     SCAN_FAILED = "SCAN_FAILED"
     FINDING_STATUS_CHANGED = "FINDING_STATUS_CHANGED"  # by an analyst (scan changes: see docs)
+    RATE_LIMITED = "RATE_LIMITED"  # too many scans or sandbox changes from one client
+    # Sandbox mode: a switch in the simulated AWS was changed, or all were reset.
+    SANDBOX_CHANGED = "SANDBOX_CHANGED"
+    SANDBOX_RESET = "SANDBOX_RESET"
 
 
 class AuditOutcome(enum.StrEnum):
@@ -39,3 +43,4 @@ class TargetType(enum.StrEnum):
     SCAN = "SCAN"
     FINDING = "FINDING"
     ROUTE = "ROUTE"
+    SANDBOX_CONTROL = "SANDBOX_CONTROL"

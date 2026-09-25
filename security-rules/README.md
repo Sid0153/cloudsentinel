@@ -37,6 +37,11 @@ at (`limitations`).
 
 ## Adding a rule
 
+Besides the steps below, add a switch for the rule to the sandbox (`CONTROLS` in
+`backend/app/aws/sandbox.py`, see [docs/sandbox.md](../docs/sandbox.md)); a test fails while any
+rule cannot be triggered there.
+
+
 1. Write the check in `backend/app/rules/checks/<area>.py` with the `@check("CS-AREA-NNN",
    ResourceType...)` decorator. Return `Outcome.unknown(...)` whenever the data you need is `None`
    or listed in `unknown_checks`.

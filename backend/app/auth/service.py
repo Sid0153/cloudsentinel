@@ -16,7 +16,7 @@ from app.auth.tokens import (
 )
 from app.core.config import Settings
 from app.models.refresh_token import RefreshToken
-from app.models.user import User
+from app.models.user import Role, User
 
 
 class InvalidCredentialsError(Exception):
@@ -25,6 +25,45 @@ class InvalidCredentialsError(Exception):
 
 class InvalidRefreshTokenError(Exception):
     """The refresh token is unknown, expired, revoked or belongs to a disabled user."""
+
+
+class GuestAccessUnavailableError(Exception):
+    """Guest access is configured, but the guest account is missing, disabled or an ADMIN."""
+
+
+def is_guest(user: User, settings: Settings) -> bool:
+    """The shared guest account (GUEST_EMAIL), used by every visitor of a public demo."""
+    return settings.guest_email is not None and user.email == settings.guest_email
+
+
+def authenticate_guest(db: Session, settings: Settings) -> User:
+    """Signs a visitor in as the guest account, without a password.
+
+    Account lockout does not apply: it protects a password, and the guest has none that
+    anyone knows. An ADMIN guest is refused, so a configuration mistake cannot hand out
+    administrator access to everyone.
+    """
+    user = db.scalar(select(User).where(User.email == settings.guest_email))
+    if user is None or not user.is_active or user.role == Role.ADMIN:
+        if user is None:
+            reason = "guest_missing"
+        elif not user.is_active:
+            reason = "guest_disabled"
+        else:
+            reason = "guest_is_admin"
+        _login_failed(db, user, reason)
+        raise GuestAccessUnavailableError
+    user.last_login_at = datetime.now(UTC)
+    record(
+        db,
+        AuditAction.LOGIN_SUCCEEDED,
+        actor=user,
+        target_type=TargetType.USER,
+        target_id=user.id,
+        details={"method": "guest"},
+    )
+    db.commit()
+    return user
 
 
 def _login_failed(db: Session, user: User | None, reason: str) -> InvalidCredentialsError:
@@ -135,15 +174,20 @@ def rotate_session(
 
     if row.revoked_at is not None:
         # A token that was already rotated or revoked is being replayed. Assume it was
-        # stolen and end every session of this user.
-        revoke_all_for_user(db, row.user_id, now)
+        # stolen and end every session of this user. Not for the shared guest account: that
+        # would sign out every visitor, and a stolen guest session gives nothing that
+        # "Explore as guest" does not.
+        owner = db.get(User, row.user_id)
+        revoke_all = owner is None or not is_guest(owner, settings)
+        if revoke_all:
+            revoke_all_for_user(db, row.user_id, now)
         record(
             db,
             AuditAction.REFRESH_TOKEN_REUSED,
             outcome=AuditOutcome.FAILURE,
             target_type=TargetType.USER,
             target_id=row.user_id,
-            details={"sessions_revoked": True},
+            details={"sessions_revoked": revoke_all},
         )
         db.commit()
         raise InvalidRefreshTokenError

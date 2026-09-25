@@ -8,6 +8,10 @@
 - Passwords are hashed with **Argon2id** (`argon2-cffi` defaults). Length policy only:
   12 to 128 characters, no forced symbols.
 - Emails are trimmed and lowercased before storage and lookup.
+- **Guest access** (optional, for public demos): with `GUEST_EMAIL` set, `POST /api/auth/guest`
+  signs visitors in as one shared, non-ADMIN account without a password. Its password cannot be
+  changed, lockout does not block it, and a replayed guest refresh token ends only that one
+  session. Details and every safeguard: [sandbox.md](sandbox.md#guest-access).
 
 ## Sessions
 
@@ -30,7 +34,9 @@
 - Same `401 Invalid email or password` for unknown email, wrong password, locked and disabled
   accounts. A dummy Argon2 check runs for unknown emails so timing does not reveal them.
 - Account lockout: 5 consecutive failures lock the account for 15 minutes.
-- Per-IP rate limit on login: 10 attempts per minute, then `429` with `Retry-After`.
+- Per-IP rate limit on login: 10 attempts per minute, then `429` with `Retry-After`. Guest
+  sign-in shares this limit. Starting scans (3/min) and sandbox changes (30/min) have their own
+  per-IP limits; hitting one is audited as `RATE_LIMITED`.
 - Failed logins are logged with the client IP only, never the submitted email or password.
 - Validation errors never echo submitted values (a custom 422 handler strips them).
 
@@ -73,6 +79,9 @@
   (e.g. `AccessDenied (GetBucketAcl)`), never AWS's full message, which can contain ARNs.
 - The test suite replaces credentials with fake values and uses moto, so tests can never
   reach a real AWS account.
+- **Sandbox mode** (`SANDBOX_AWS_ENDPOINT`) sends every AWS call to a simulator with fixed fake
+  credentials. The endpoint may not be an AWS host, and the only code that changes anything
+  (`aws/sandbox.py`) is reachable only in sandbox mode. See [sandbox.md](sandbox.md).
 
 ## Configuration and deployment
 

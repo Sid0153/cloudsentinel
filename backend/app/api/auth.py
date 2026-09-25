@@ -9,9 +9,12 @@ from app.audit.service import record
 from app.auth.deps import CurrentUser
 from app.auth.passwords import hash_password, verify_password
 from app.auth.service import (
+    GuestAccessUnavailableError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
     authenticate,
+    authenticate_guest,
+    is_guest,
     revoke_all_for_user,
     revoke_refresh_token,
     rotate_session,
@@ -67,14 +70,7 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-@router.post("/login", response_model=TokenResponse, responses=error_responses(401, 429))
-def login(
-    payload: LoginRequest,
-    request: Request,
-    response: Response,
-    db: DbSession,
-    settings: SettingsDep,
-) -> TokenResponse:
+def _check_login_rate(request: Request, db: DbSession) -> None:
     limiter: SlidingWindowRateLimiter = request.app.state.login_limiter
     ip = _client_ip(request)
     if not limiter.allow(ip):
@@ -87,6 +83,17 @@ def login(
             headers={"Retry-After": "60"},
         )
 
+
+@router.post("/login", response_model=TokenResponse, responses=error_responses(401, 429))
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: DbSession,
+    settings: SettingsDep,
+) -> TokenResponse:
+    _check_login_rate(request, db)
+    ip = _client_ip(request)
     try:
         user = authenticate(db, payload.email, payload.password, settings)
     except InvalidCredentialsError:
@@ -102,6 +109,26 @@ def login(
     access_token, refresh_token = start_session(db, user, settings)
     _set_refresh_cookie(response, refresh_token, settings)
     logger.info("User %s signed in", user.id)
+    return _token_response(access_token, user, settings)
+
+
+@router.post("/guest", response_model=TokenResponse, responses=error_responses(403, 404, 429))
+def guest_login(
+    request: Request, response: Response, db: DbSession, settings: SettingsDep
+) -> TokenResponse:
+    """Signs in as the shared guest account (only when GUEST_EMAIL is set). No password."""
+    if settings.guest_email is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guest access is off")
+    _check_login_rate(request, db)
+    try:
+        user = authenticate_guest(db, settings)
+    except GuestAccessUnavailableError:
+        logger.error("Guest access is enabled, but the guest account cannot be used")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Guest access is not available"
+        ) from None
+    access_token, refresh_token = start_session(db, user, settings)
+    _set_refresh_cookie(response, refresh_token, settings)
     return _token_response(access_token, user, settings)
 
 
@@ -145,11 +172,17 @@ def me(user: CurrentUser) -> UserPublic:
 @router.post(
     "/change-password",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=error_responses(400, 401),
+    responses=error_responses(400, 401, 403),
 )
 def change_password(
     payload: ChangePasswordRequest, user: CurrentUser, db: DbSession, settings: SettingsDep
 ) -> Response:
+    if is_guest(user, settings):
+        # Everyone shares this account: changing its password would sign every visitor out.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The shared guest account's password cannot be changed",
+        )
     if not verify_password(user.password_hash, payload.current_password):
         record(
             db,

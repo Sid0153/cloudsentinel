@@ -20,7 +20,8 @@ implemented or tested; the last section lists what is **not** mitigated.
 
 ```
 Browser ──(1)── nginx ──(2)── FastAPI ──(3)── PostgreSQL
-                                  └────(4)── AWS APIs (read-only identity)
+                                  ├────(4)── AWS APIs (read-only identity)
+                                  └────(6)── simulated AWS (sandbox mode only)
 Operator shell ──(5)── containers (.env, CLI)
 ```
 
@@ -30,6 +31,8 @@ Operator shell ──(5)── containers (.env, CLI)
    change or delete audit records.
 4. Backend to AWS: responses are data; errors can contain ARNs.
 5. Operator: configuration and secrets.
+6. Backend to the simulator (sandbox mode): accepts any credentials, so it must be reachable by
+   the backend only; it holds no real data.
 
 ## STRIDE
 
@@ -43,6 +46,9 @@ Operator shell ──(5)── containers (.env, CLI)
 | Tampering | Editing the audit trail | Database triggers reject UPDATE, DELETE, TRUNCATE on `audit_logs` | migration 0006, `test_audit.py` |
 | Tampering | Malicious rule file | `yaml.safe_load`, strict schema, startup refuses mismatches | `rules/catalog.py`, `test_rule_catalog.py` |
 | Tampering | Compromised dependency | Hash-pinned lockfiles installed with `--require-hashes`, `npm ci`, pip-audit / npm audit in CI, Dependabot | `requirements*.txt`, CI |
+| Spoofing | Guest access handing out more than intended | Guest must not be ADMIN (refused at sign-in), no usable password, password change refused, every guest action audited with IP | `auth/service.py`, `tests/api/test_guest.py` |
+| Tampering | Sandbox mode changing a real AWS account | Endpoint may not be an AWS host, fixed fake credentials (real chain never read), write code reachable only through sandbox routes | `core/config.py`, `aws/session.py`, `test_sandbox_session.py` |
+| Tampering | Anyone reaching the simulator directly | Not published on the host; only the backend can connect (checked in CI) | `docker-compose.sandbox.yml`, CI |
 | **Repudiation** | "I did not change that" | Append-only audit log with actor, IP and request ID for logins, admin actions, scans and triage | `audit/`, `docs/architecture.md` |
 | **Information disclosure** | Secrets in logs or errors | Log redaction filter, 422 bodies without submitted values, generic 500s, settings errors without values, audit sanitizer | `core/redaction.py`, `core/errors.py`, `test_config.py`, `test_audit_sanitize.py` |
 | Information disclosure | AWS error text with ARNs | Only error code and operation are stored (`AccessDenied (GetBucketAcl)`) | `aws/common.py`, `test_scans.py` |
@@ -51,7 +57,9 @@ Operator shell ──(5)── containers (.env, CLI)
 | Information disclosure | Over-privileged AWS identity | Custom 14-action read-only policy; a test proves it matches the code exactly | `infrastructure/`, `test_iam_policy.py` |
 | **Denial of service** | Login flooding | Rate limit and lockout (per process) | `core/rate_limit.py` |
 | Denial of service | Huge requests / pages | `limit` caps on lists, 1 MB body limit at nginx, string length limits in schemas | API, `nginx.conf` |
-| Denial of service | Many parallel scans | One active scan per AWS account (row lock) | `scans/service.py`, `test_scans.py` |
+| Denial of service | Many parallel scans | One active scan per AWS account (row lock), 3 scan starts per minute per IP | `scans/service.py`, `test_scans.py` |
+| Denial of service | Visitors of a public demo signing each other out | Guest refresh-token replay ends only that session; guest password cannot be changed; lockout does not block guest sign-in | `auth/service.py`, `test_guest.py` |
+| Denial of service | Flooding the sandbox with changes | 30 changes per minute per IP; reset restores defaults | `api/sandbox.py`, `test_sandbox.py` |
 | **Elevation of privilege** | VIEWER calling ANALYST/ADMIN routes | `require_role` on the server; a test enumerates every route and every role; denials are audited | `auth/deps.py`, `test_rbac.py` |
 | Elevation of privilege | Admin locking themselves out / self-promotion | Admins cannot change their own role or active flag | `user_service.py`, `test_users.py` |
 | Elevation of privilege | Container escape after an RCE | Non-root users, no capabilities, `no-new-privileges`, read-only root filesystem (checked in CI) | `docker-compose.yml`, CI |

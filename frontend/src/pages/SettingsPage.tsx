@@ -38,6 +38,8 @@ function PasswordForm() {
       await signOut();
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 400) setError("The current password is incorrect.");
+      else if (caught instanceof ApiError && caught.status === 403)
+        setError("The shared guest account's password cannot be changed.");
       else if (caught instanceof ApiError && caught.status === 422)
         setError("The new password must be 12 to 128 characters.");
       else setError("Could not change the password. Please try again.");

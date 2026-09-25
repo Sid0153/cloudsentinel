@@ -17,6 +17,7 @@ _DESCRIPTIONS = {
     409: "Conflicts with the current state (see the detail message)",
     429: "Too many attempts; retry after the Retry-After header",
     502: "AWS could not be reached or refused the request",
+    503: "The simulated AWS (sandbox mode) is not reachable right now",
 }
 
 

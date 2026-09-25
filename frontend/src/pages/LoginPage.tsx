@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
+import { useAbout } from "../about/AboutContext";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../services/api";
 
@@ -8,12 +9,14 @@ function describeError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) return "Incorrect email or password.";
     if (error.status === 429) return "Too many attempts. Wait a minute and try again.";
+    if (error.status === 403 || error.status === 404) return "Guest access is not available right now.";
   }
   return "Could not sign in. Please try again.";
 }
 
 export default function LoginPage() {
-  const { state, signIn } = useAuth();
+  const { state, signIn, signInAsGuest } = useAuth();
+  const about = useAbout();
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,17 +28,21 @@ export default function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function attempt(signInWith: () => Promise<void>) {
     setSubmitting(true);
     setError(null);
     try {
-      await signIn(email, password);
+      await signInWith();
     } catch (caught) {
       setError(describeError(caught));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void attempt(() => signIn(email, password));
   }
 
   return (
@@ -46,6 +53,11 @@ export default function LoginPage() {
       >
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="mt-1 text-sm text-slate-600">CloudSentinel</p>
+        {about?.sandbox_mode && (
+          <p className="mt-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Demo server: scans run against a simulated AWS account, not a real one.
+          </p>
+        )}
 
         <label htmlFor="email" className="mt-5 block text-sm font-medium">
           Email
@@ -86,6 +98,23 @@ export default function LoginPage() {
         >
           {submitting ? "Signing in…" : "Sign in"}
         </button>
+
+        {about?.guest_access && (
+          <div className="mt-5 border-t border-slate-200 pt-5">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void attempt(signInAsGuest)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm font-medium disabled:opacity-60"
+            >
+              Explore as guest
+            </button>
+            <p className="mt-2 text-xs text-slate-600">
+              No account needed. The guest is a shared ANALYST account: look around, start scans and
+              change the sandbox. It cannot manage users or read the audit log.
+            </p>
+          </div>
+        )}
       </form>
     </div>
   );

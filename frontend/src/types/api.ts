@@ -185,3 +185,25 @@ export interface AuditLogEntry {
   request_id: string | null;
   details: Record<string, unknown>;
 }
+
+// GET /api/about: public, read before sign-in.
+export interface About {
+  version: string;
+  sandbox_mode: boolean; // scans run against a simulated AWS, not a real account
+  guest_access: boolean; // "Explore as guest" is available
+}
+
+export interface SandboxControl {
+  key: string;
+  title: string;
+  description: string;
+  rule_id: string;
+  insecure: boolean;
+  insecure_by_default: boolean;
+}
+
+export interface SandboxState {
+  account_id: string;
+  region: string;
+  controls: SandboxControl[];
+}

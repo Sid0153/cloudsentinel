@@ -8,9 +8,9 @@ Findings must come from a real scan. Two ways:
   for example a security group with SSH open to `0.0.0.0/0` (not attached to anything), an S3
   bucket without Block Public Access, an IAM user with a console password and no MFA. Scan it,
   then **delete those resources**. Set an AWS Budget alert first.
-- **Without AWS:** the automated tests run the full pipeline against moto (a local AWS
-  simulator). Say so if you show results produced that way; do not present them as a real
-  account.
+- **Without AWS: sandbox mode** ([sandbox.md](sandbox.md)). The real app scans a simulated AWS
+  account, and the Sandbox page lets you break or fix one setting per rule live. Always say it
+  is simulated (the app shows a banner); do not present it as a real account.
 
 Never demo against an account you are not authorized to scan.
 

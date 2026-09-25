@@ -7,7 +7,11 @@ PostgreSQL database.
 Browser ──► nginx (frontend container) ──/api──► FastAPI ──► PostgreSQL
                                                     │
                                                     └──► AWS APIs (read-only, boto3)
+                                                         or, in sandbox mode, the simulator
 ```
+
+Sandbox mode ([sandbox.md](sandbox.md)) swaps the AWS endpoint for a moto server in its own
+container. Only `aws/session.py` knows the difference; the scan pipeline is unchanged.
 
 ## Dependency direction
 
@@ -237,3 +241,7 @@ export yet; the table grows until an operator archives it.
 | Upgrade dependencies instead of silencing audits | React Router 7, Vite 8, Vitest 5 and pytest 9 fixed every reported advisory |
 | Docs checked by tests (`openapi.json`, the role table in `api.md`) | Documentation cannot silently drift from the code |
 | `check-config` before migrations | A misconfigured deployment fails with a readable message, not a stack trace |
+| Sandbox as a separate moto server, not moto patched into the backend | The backend runs its real network code; the simulator is swapped by one setting and can never be active in normal mode |
+| One sandbox switch per rule, checked by a test | Every rule can be demonstrated live, and a switch that stops matching its rule fails CI |
+| Guest access as one shared ANALYST account instead of self-registration | Demo visitors need no account; nothing to spam, and the data is simulated anyway |
+| Rate limits keyed by client IP, not by user | All guests are the same user; per-user limits would let one visitor block everyone |

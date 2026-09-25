@@ -19,9 +19,14 @@ something works without verifying it, and end each phase with the interview-lear
 | 8 Audit logging | Done, green in CI (410 backend, 58 frontend tests). Append-only via DB triggers |
 | 9 Quality / DevOps | Done, green in CI (421 backend tests, 96% coverage, 0 audit findings, gitleaks clean) |
 | 10 Portfolio preparation | Done, green in CI (425 backend, 61 frontend tests, 96% coverage) |
+| 11 Sandbox mode and guest access | Done locally (506 backend, 75 frontend tests, 96% coverage); not yet pushed to CI |
+| 12 Free public deployment | NEXT. Wait for the user to say "Proceed to Phase 12" |
 
-All ten phases are complete. Later work is ordinary maintenance:
-keep the checks below green and the docs tests passing.
+Phases 11-12 (user's goal): a public link where anyone can use the real, working app for free,
+without an AWS account and without offering it to customers. Phase 11 added sandbox mode (the
+real app scans a simulated AWS: moto as its own server) and guest access (docs/sandbox.md).
+Phase 12 deploys it on free hosting (plan: Render web services + Neon PostgreSQL; check their
+current free-tier terms first; the user creates those accounts, never share credentials).
 
 Design decisions are in `docs/architecture.md` and `docs/security-model.md`. Rule engine
 (Phase 5): checks in `backend/app/rules/checks/`, listed in `registry.py`, metadata in
@@ -58,6 +63,10 @@ mapping in `tests/unit/test_iam_policy.py`. Tests fail if any of these is stale.
 ## Conventions
 
 - `aws/` is the only package importing boto3; `domain/`, `rules/` and `risk/` stay pure.
+- Sandbox mode: `aws/sandbox.py` is the only code that changes anything in "AWS", and only in
+  the simulator; it is excluded from the IAM policy test on purpose. Every rule needs a sandbox
+  switch in `CONTROLS` (a test fails otherwise). Anything shown from sandbox mode is labelled
+  simulated.
 - Readable code over clever code, small modules, few dependencies.
 - Tests: moto for AWS (it does not load AWS-managed policies and does not implement
   GetBucketPolicyStatus; tests use the `policy_status` fixture), real PostgreSQL for API tests.
@@ -66,14 +75,17 @@ mapping in `tests/unit/test_iam_policy.py`. Tests fail if any of these is stale.
   triggers): tests must not try to clean it up with DELETE.
 - Every new API route must be added to `EXPECTED_ACCESS` or `PUBLIC_ROUTES` in
   `backend/tests/api/test_rbac.py`.
+- Do not run `ruff format` on existing files: the codebase is not format-clean and CI only runs
+  `ruff check`. Format new files only.
 - New rules need a check, a `registry.py` entry, a YAML file, a risk profile and tests (see
   `security-rules/README.md`); the app refuses to start if they do not match.
 - The backend image gets `security-rules/` through the compose build context `security_rules`.
 - Frontend: API calls live in `src/services/`, types mirror backend schemas in `src/types/api.ts`,
   pages load data with `useApi`. Tests render the whole app with `tests/renderApp.tsx` and mock
   `fetch` per route (`tests/mockApi.ts`; `PENDING` keeps a request open for loading states).
-- Dependencies are locked. Backend: edit `requirements*.in`, then run the `uv pip compile`
-  command at the top of the `.txt` lockfile; install with `pip install --require-hashes`.
+- Dependencies are locked. Backend (and `sandbox/`): edit `requirements*.in`, then run the
+  `uv pip compile` command at the top of the `.txt` lockfile; install with
+  `pip install --require-hashes`.
   Frontend: `npm ci`; `package-lock.json` is committed. Never silence an audit finding without
   saying why; upgrade instead.
 - In Git Bash, `docker run -v` paths need `MSYS_NO_PATHCONV=1`.

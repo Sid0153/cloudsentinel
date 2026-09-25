@@ -9,6 +9,10 @@ os.environ["DATABASE_URL"] = (
 )
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECRET_KEY", "test-only-key-0123456789-abcdefghijklmnop")
+# Normal mode unless a test turns these on: a developer's .env must not switch the whole suite
+# into sandbox mode or guest access (environment variables win over the .env file).
+os.environ["SANDBOX_AWS_ENDPOINT"] = ""
+os.environ["GUEST_EMAIL"] = ""
 
 # Fake AWS credentials for every test, so no test can ever reach a real AWS account even if
 # the developer's machine has credentials configured. moto accepts any values.

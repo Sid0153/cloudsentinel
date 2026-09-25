@@ -33,12 +33,18 @@ OPERATION_TO_ACTIONS: dict[tuple[str, str], set[str]] = {
     ("session.py", "assume_role"): set(),
 }
 _OPERATION_PREFIXES = ("describe_", "get_", "list_", "generate_", "assume_")
+# app/aws/sandbox.py builds and changes the simulated AWS in sandbox mode. Its clients always
+# point at the simulator (tests/unit/test_sandbox_session.py), so its calls are not part of
+# what the scanner needs from a real account.
+_NOT_SCANNER = {"sandbox.py"}
 
 
 def _aws_operations() -> set[tuple[str, str]]:
     """Every AWS API operation called in app/aws/, found by reading the code (AST)."""
     found: set[tuple[str, str]] = set()
     for path in (BACKEND / "app" / "aws").rglob("*.py"):
+        if path.name in _NOT_SCANNER:
+            continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
                 continue

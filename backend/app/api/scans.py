@@ -1,10 +1,20 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy import func, select
 
 from app.api.deps import TOTAL_COUNT_HEADER, DbSession
+from app.api.limits import enforce_rate_limit
 from app.auth.deps import AnalystUser, CurrentUser
 from app.models.scan import Scan
 from app.scans.deps import ScanRunner, get_scan_runner
@@ -19,16 +29,18 @@ router = APIRouter(prefix="/scans", tags=["scans"], responses=error_responses(40
     "",
     response_model=ScanPublic,
     status_code=status.HTTP_202_ACCEPTED,
-    responses=error_responses(404, 409),
+    responses=error_responses(404, 409, 429),
 )
 def start_scan(
     payload: ScanCreate,
     user: AnalystUser,
     db: DbSession,
+    request: Request,
     background_tasks: BackgroundTasks,
     runner: Annotated[ScanRunner, Depends(get_scan_runner)],
 ) -> Scan:
     """Queues a read-only scan and returns immediately. Poll GET /api/scans/{id} for progress."""
+    enforce_rate_limit(request, db, request.app.state.scan_limiter, actor=user, kind="scan")
     try:
         scan = create_scan(db, payload.aws_account_id, user.id)
     except AwsAccountNotFoundError:

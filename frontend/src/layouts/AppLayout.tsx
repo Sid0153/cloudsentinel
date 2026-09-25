@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 
+import { useAbout } from "../about/AboutContext";
 import { useAuth } from "../auth/AuthContext";
 
 const NAV = [
@@ -18,6 +19,7 @@ function navClass({ isActive }: { isActive: boolean }): string {
 
 export default function AppLayout() {
   const { state, signOut } = useAuth();
+  const about = useAbout();
   if (state.status !== "authenticated") {
     return null;
   }
@@ -37,6 +39,11 @@ export default function AppLayout() {
                   {item.label}
                 </NavLink>
               ))}
+              {about?.sandbox_mode && (
+                <NavLink to="/sandbox" className={navClass}>
+                  Sandbox
+                </NavLink>
+              )}
               {user.role === "ADMIN" && (
                 <>
                   <NavLink to="/users" className={navClass}>
@@ -62,6 +69,18 @@ export default function AppLayout() {
           </div>
         </div>
       </header>
+      {about?.sandbox_mode && (
+        <div role="note" className="border-b border-amber-200 bg-amber-50">
+          <p className="mx-auto max-w-6xl px-6 py-2 text-sm text-amber-900">
+            Sandbox mode: scans run against a simulated AWS account, not a real one. Change its
+            settings on the{" "}
+            <Link to="/sandbox" className="font-medium underline">
+              Sandbox
+            </Link>{" "}
+            page, then start a scan.
+          </p>
+        </div>
+      )}
       <main className="mx-auto max-w-6xl px-6 py-8">
         <Outlet />
       </main>

@@ -1,0 +1,27 @@
+# Optional override for sandbox mode: scans run against a simulated AWS (moto) instead of a
+# real account, and visitors can sign in as a shared guest. See docs/sandbox.md.
+#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
+# No AWS account or credentials are involved: the backend sends every AWS call to the
+# simulator with fixed fake credentials.
+services:
+  sandbox-aws:
+    build: ./sandbox
+    # No ports are published: only the backend can reach the simulator, which accepts any
+    # credentials and must never be exposed.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+  backend:
+    environment:
+      SANDBOX_AWS_ENDPOINT: http://sandbox-aws:5000
+      # Leave empty to disable guest access (then only real accounts can sign in).
+      GUEST_EMAIL: ${GUEST_EMAIL:-guest@cloudsentinel.example}
+    depends_on:
+      sandbox-aws:
+        condition: service_healthy

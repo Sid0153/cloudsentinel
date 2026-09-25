@@ -7,15 +7,20 @@ startup instead of silently running with something guessable.
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.schemas.validators import normalize_email
 
 MIN_SECRET_KEY_LENGTH = 32
 MIN_SECRET_KEY_DISTINCT_CHARS = 10  # rejects "aaaa..." and other obviously weak keys
 DATABASE_URL_PREFIX = "postgresql+psycopg://"
 # security-rules/rules/ at the repository root. The Docker image sets RULES_DIR instead.
 DEFAULT_RULES_DIR = Path(__file__).resolve().parents[3] / "security-rules" / "rules"
+# Hosts of real AWS endpoints. The sandbox endpoint must never be one of them.
+AWS_HOST_SUFFIXES = ("amazonaws.com", "amazonaws.com.cn", "api.aws")
 
 
 class Settings(BaseSettings):
@@ -41,6 +46,15 @@ class Settings(BaseSettings):
     max_failed_logins: int = Field(default=5, ge=1)
     lockout_minutes: int = Field(default=15, ge=1)
     login_rate_limit_per_minute: int = Field(default=10, ge=1)
+    scan_rate_limit_per_minute: int = Field(default=3, ge=1)  # scans started, per client IP
+    sandbox_rate_limit_per_minute: int = Field(default=30, ge=1)  # sandbox changes, per IP
+
+    # Sandbox mode (docs/sandbox.md): every AWS call goes to this simulated AWS (moto) with
+    # fake credentials, never to real AWS. Unset means normal mode: real AWS.
+    sandbox_aws_endpoint: str | None = None
+    # Email of the shared guest account. When set, POST /api/auth/guest signs visitors in
+    # as that user without a password (for public demos). The account must not be an ADMIN.
+    guest_email: str | None = None
 
     @field_validator("secret_key")
     @classmethod
@@ -66,6 +80,24 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ORIGINS must list explicit origins, wildcards are not allowed")
         return value
 
+    @field_validator("sandbox_aws_endpoint")
+    @classmethod
+    def _sandbox_endpoint_is_not_aws(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        parts = urlsplit(value)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError("SANDBOX_AWS_ENDPOINT must be an http(s) URL")
+        host = parts.hostname.lower()
+        if any(host == suffix or host.endswith("." + suffix) for suffix in AWS_HOST_SUFFIXES):
+            raise ValueError("SANDBOX_AWS_ENDPOINT must point to the simulator, not to real AWS")
+        return value.rstrip("/")
+
+    @field_validator("guest_email")
+    @classmethod
+    def _guest_email_is_valid(cls, value: str | None) -> str | None:
+        return normalize_email(value) if value else None
+
     @model_validator(mode="after")
     def _production_is_locked_down(self) -> Self:
         """Settings that are fine on a laptop but unsafe on a server."""
@@ -81,6 +113,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def sandbox_enabled(self) -> bool:
+        return self.sandbox_aws_endpoint is not None
 
     @property
     def docs_enabled(self) -> bool:
