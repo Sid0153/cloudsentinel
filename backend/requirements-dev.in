@@ -5,12 +5,12 @@ pytest>=9.0.3,<10.0
 pytest-cov>=5.0
 # The HTTP client behind FastAPI's TestClient (httpx2 is the maintained successor Starlette uses).
 httpx2>=2.13,<3.0
-ruff>=0.6
-mypy>=1.11
+ruff>=0.17.0
+mypy>=2.4.0
 types-PyYAML>=6.0
 # Checks installed packages against known vulnerabilities (PyPI advisory database).
 pip-audit>=2.7
 # Generates the lockfiles (uv pip compile --universal: one lock valid on every OS).
-uv>=0.5
+uv>=0.13.0
 # Mocks the AWS APIs in-process, so the test suite never needs a real AWS account.
-moto[ec2,iam,s3,s3control]>=5.0,<6.0
+moto[ec2,iam,s3,s3control]>=5.2.4,<6.0
